@@ -302,6 +302,7 @@ function bindButton(id,key){
 bindButton("left","left"); bindButton("right","right");
 bindButton("accelerate","gas"); bindButton("brake","brake");
 let speed=0,steerValue=0,odometer=0;
+let gameActive=false;
 const truckPhysics={mass:28000,wheelRadius:0.52,wheelbase:5.8,finalDrive:1.9,gearRatios:[12.0,8.0,5.5,3.8,2.7,2.05],peakTorque:2050,maxRpm:2300,idleRpm:650,brakeForce:185000,rollingCoefficient:0.006,dragArea:7.2,airDensity:1.225,tyreGrip:0.72};
 let engineLoad=0,trailerArticulation=0,offRoadTime=0;
 const suspensionStates=wheels.map(mesh=>({mesh,restY:mesh.position.y,offset:0,velocity:0}));
@@ -430,6 +431,7 @@ function updateCareerHud(now){
   if(toastUntil&&now>toastUntil){toast.style.display="none";toastUntil=0;}
 }
 scene.onBeforeRenderObservable.add(()=>{
+ if(!gameActive)return;
  const dt=Math.min(engine.getDeltaTime()/1000,0.05);
  const gearIndex=Math.max(0,Math.min(5,(gear||1)-1));
  const ratio=truckPhysics.gearRatios[gearIndex];
@@ -609,6 +611,7 @@ function updateVehicleSystems(dt){
  const now=performance.now();if(now-systemsRefreshAt>900){systemsRefreshAt=now;refreshSystems();}
 }
 scene.onBeforeRenderObservable.add(()=>{
+ if(!gameActive)return;
  const dt=Math.min(engine.getDeltaTime()/1000,0.05);updateWorld(dt);updateVehicleSystems(dt);
 });
 
@@ -677,8 +680,92 @@ async function loadKenneyWorld(){
  jobs.push(placeKenneyModel("city-kit-roads","construction-barrier.glb",8,0,285,1.1,0));
  await Promise.all(jobs);console.info("Kenney CC0 assets loaded:",jobs.length);
 }
-loadKenneyWorld();
 
+const worldReady=loadKenneyWorld().catch(error=>console.warn("World asset loading completed with warnings",error));
+
+// Boot flow and menu are part of the live Babylon scene, not a disconnected demo.
+const menu=document.createElement("section");
+menu.id="ehMainMenu";
+menu.innerHTML=[
+ '<div class="eh-menu-card">',
+ '<div class="eh-brand-mark">EURO <span>HAUL</span></div>',
+ '<div class="eh-tagline">EUROPEAN LONG-HAUL SIMULATOR</div>',
+ '<div class="eh-menu-status" id="ehMenuStatus">Preparing your truck and world…</div>',
+ '<div class="eh-menu-layout"><nav class="eh-menu-nav">',
+ '<button data-page="drive" class="eh-menu-primary">START / CONTINUE DRIVING</button>',
+ '<button data-page="garage">GARAGE & TRUCK SETUP</button>',
+ '<button data-page="jobs">DELIVERY CONTRACT</button>',
+ '<button data-page="map">ROUTE OVERVIEW</button>',
+ '<button data-page="profile">DRIVER PROFILE</button>',
+ '<button data-page="settings">GRAPHICS SETTINGS</button>',
+ '<button id="ehNewTrip">NEW TRIP</button>',
+ '</nav><div class="eh-menu-detail" id="ehMenuDetail">',
+ '<h2>WELCOME, DRIVER</h2><p>Your truck is waiting. Choose a destination or head out on the highway.</p>',
+ '<div class="eh-menu-facts"><span>CAREER BALANCE</span><b id="ehMenuCash">€0</b></div>',
+ '<div class="eh-menu-facts"><span>DELIVERIES COMPLETED</span><b id="ehMenuJobs">0</b></div>',
+ '</div></div><div class="eh-menu-footer">ORIGINAL EURO HAUL • DRIVE SAFE • DELIVER ON TIME</div></div>'
+].join("");
+document.body.appendChild(menu);
+const menuStatus=document.getElementById("ehMenuStatus");
+const menuDetail=document.getElementById("ehMenuDetail");
+let graphicsQuality="STANDARD",returnToMenuFromGarage=false;
+function refreshMenuHome(){
+ document.getElementById("ehMenuCash").textContent="€"+career.cash.toLocaleString();
+ document.getElementById("ehMenuJobs").textContent=String(career.deliveries);
+}
+function showMenuPage(page){
+ refreshMenuHome();
+ if(page==="drive"){
+  gameActive=true;menu.style.display="none";input.left=input.right=input.gas=input.brake=false;
+  showToast("WELCOME BACK TO THE ROAD");return;
+ }
+ if(page==="garage"){
+  returnToMenuFromGarage=true;menu.style.display="none";panel.style.display="block";refreshSystems();return;
+ }
+ if(page==="jobs"){
+  const remaining=Math.max(0,destinationZ-truck.position.z);
+  menuDetail.innerHTML='<h2>ACTIVE DELIVERY</h2><p>Reach the green depot gate and stop safely to receive payment.</p><div class="eh-menu-facts"><span>DESTINATION DISTANCE</span><b>'+Math.ceil(remaining)+' m</b></div><div class="eh-menu-facts"><span>REWARD</span><b>€750</b></div><button id="ehNewRoute" class="eh-action-button">SET NEW DELIVERY ROUTE</button>';
+  document.getElementById("ehNewRoute").addEventListener("click",()=>{destinationZ=truck.position.z+180;destination.position.z=destinationZ;showToast("NEW DELIVERY ROUTE SET");showMenuPage("jobs");});
+ }else if(page==="map"){
+  const remaining=Math.max(0,destinationZ-truck.position.z);
+  menuDetail.innerHTML='<h2>ROUTE OVERVIEW</h2><p>Current playable route: European freight highway. Follow the road ahead to the active delivery gate.</p><div class="eh-route-track"><span>DEPOT</span><i></i><b>YOUR TRUCK</b><i></i><span>DELIVERY</span></div><div class="eh-menu-facts"><span>REMAINING DISTANCE</span><b>'+Math.ceil(remaining)+' m</b></div><div class="eh-menu-facts"><span>WEATHER</span><b>'+weatherMode.toUpperCase()+'</b></div>';
+ }else if(page==="profile"){
+  menuDetail.innerHTML='<h2>DRIVER PROFILE</h2><p>Your career progress is saved on this device.</p><div class="eh-menu-facts"><span>CAREER BALANCE</span><b>€'+career.cash.toLocaleString()+'</b></div><div class="eh-menu-facts"><span>DELIVERIES</span><b>'+career.deliveries+'</b></div><div class="eh-menu-facts"><span>TRIP ODOMETER</span><b>'+(odometer/1000).toFixed(1)+' km</b></div><div class="eh-menu-facts"><span>TRUCK CONDITION</span><b>'+Math.round(100-vehicleDamage)+'%</b></div>';
+ }else if(page==="settings"){
+  menuDetail.innerHTML='<h2>GRAPHICS SETTINGS</h2><p>Adjust rendering scale to balance image quality and Android performance.</p><div class="eh-menu-facts"><span>QUALITY PRESET</span><b id="ehQualityValue">'+graphicsQuality+'</b></div><button id="ehQualityToggle" class="eh-action-button">CHANGE GRAPHICS QUALITY</button><p class="eh-small-note">Lower rendering scale can improve performance on devices with limited GPU memory.</p>';
+  document.getElementById("ehQualityToggle").addEventListener("click",()=>{
+   graphicsQuality=graphicsQuality==="STANDARD"?"PERFORMANCE":"STANDARD";
+   engine.setHardwareScalingLevel(graphicsQuality==="PERFORMANCE"?1.35:Math.min(1.5,Math.max(1,window.devicePixelRatio||1)));
+   document.getElementById("ehQualityValue").textContent=graphicsQuality;
+  });
+ }
+}
+menu.querySelectorAll("[data-page]").forEach(button=>button.addEventListener("click",()=>showMenuPage(button.dataset.page)));
+const menuButton=document.createElement("button");menuButton.id="ehMenuButton";menuButton.textContent="MENU";document.body.appendChild(menuButton);
+menuButton.addEventListener("click",()=>{
+ gameActive=false;input.left=input.right=input.gas=input.brake=false;
+ menu.style.display="grid";panel.style.display="none";showMenuPage("home");
+});
+document.getElementById("ehNewTrip").addEventListener("click",()=>{
+ speed=0;steerValue=0;truck.position.set(0,0,0);truck.rotation.set(0,0,0);
+ odometer=0;gear=1;reverseGear=false;fuel=100;vehicleDamage=0;
+ truckPhysics.mass=28000+cargoLoadKg;destinationZ=180;destination.position.z=destinationZ;
+ showMenuPage("drive");
+});
+document.getElementById("closePanel").addEventListener("click",()=>{
+ if(returnToMenuFromGarage){returnToMenuFromGarage=false;menu.style.display="grid";showMenuPage("home");}
+});
+menuStatus.textContent="Loading licensed vehicles and environment…";
+worldReady.then(()=>{
+ if(loading)loading.style.display="none";
+ menuStatus.textContent="WORLD READY • OFFLINE PLAY AVAILABLE";
+ refreshMenuHome();showMenuPage("home");menu.style.display="grid";
+}).catch(()=>{
+ if(loading)loading.style.display="none";
+ menuStatus.textContent="WORLD READY • SOME OPTIONAL MODELS UNAVAILABLE";
+ menu.style.display="grid";
+});
 engine.runRenderLoop(()=>scene.render());
+
 window.addEventListener("resize",()=>engine.resize());
 if(loading)loading.style.display="none";
