@@ -185,8 +185,8 @@ for(const x of [-0.53,0.53]){
   detailBox("seatBack",0.55,0.76,0.18,x,2.48,-0.08,seatMat);
   detailBox("seatHeadrest",0.38,0.22,0.2,x,2.98,-0.09,seatMat);
 }
-const steering=BABYLON.MeshBuilder.CreateTorus("steeringWheel",{diameter:0.43,thickness:0.035,tessellation:24},scene);
-steering.position.set(-0.48,2.42,0.98); steering.rotation.x=Math.PI/2; steering.parent=truck; steering.material=black;
+const steeringWheelMesh=BABYLON.MeshBuilder.CreateTorus("steeringWheel",{diameter:0.43,thickness:0.035,tessellation:24},scene);
+steeringWheelMesh.position.set(-0.48,2.42,0.98); steeringWheelMesh.rotation.x=Math.PI/2; steeringWheelMesh.parent=truck; steeringWheelMesh.material=black;
 detailBox("steeringColumn",0.08,0.08,0.35,-0.48,2.3,0.8,black);
 // Door skins, glazing seals, hinges, handles, mirrors and side safety details.
 for(const side of [-1,1]){
