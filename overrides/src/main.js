@@ -119,6 +119,122 @@ for(const x of [-0.85,0.85]){
   const tw2=cyl(trailer,"trailerTyre",0.9,0.34,x,0.58,-2.9,rubber);
   cyl(trailer,"trailerRim",0.53,0.36,x,0.58,-2.9,rim);
 }
+
+// Detailed truck-only finish: layered body panels, cab interior, trim and lighting.
+function detailBox(name,w,h,d,x,y,z,material,bevel=0){
+  const m=BABYLON.MeshBuilder.CreateBox(name,{width:w,height:h,depth:d},scene);
+  m.position.set(x,y,z); m.material=material; m.parent=truck;
+  return m;
+}
+const cabBlack=mat("cabSeal","#171d21"), darkGlass=mat("deepCabGlass","#243d49",0.15,0.18,0.9);
+const satin=mat("satinMetal","#737f84",0.72), seatMat=mat("seatLeather","#20272b"), dashMat=mat("dashboard","#11191e");
+const redHighlight=mat("cabHighlight","#df5145",0.22), treadMat=mat("stepTread","#252b2e",0.35);
+const frontZ=2.105;
+// A layered, deep front fascia gives the cab a formed, manufactured appearance.
+detailBox("upperFrontFascia",2.02,0.2,0.12,0,2.36,frontZ,redHighlight);
+detailBox("lowerFrontFascia",2.08,0.13,0.12,0,1.78,frontZ,redDark);
+detailBox("grilleInnerShadow",1.04,0.69,0.045,0,1.94,2.075,black);
+for(let i=0;i<7;i++){
+  const y=1.64+i*0.095;
+  detailBox("precisionGrilleBar",0.96,0.026,0.035,0,y,2.112,satin);
+}
+for(const x of [-0.52,0.52]){
+  detailBox("grilleVerticalDivider",0.035,0.65,0.04,x,1.96,2.115,chrome);
+}
+detailBox("bumperTopLip",2.22,0.07,0.39,0,1.39,2.04,chrome);
+detailBox("bumperLowerValance",1.92,0.12,0.22,0,1.19,2.08,black);
+for(const x of [-0.91,0.91]){
+  detailBox("fogLampBezel",0.31,0.2,0.08,x,1.34,2.19,black);
+  detailBox("fogLampLens",0.22,0.11,0.035,x,1.35,2.24,lamp);
+  detailBox("bumperCorner",0.17,0.18,0.2,x*1.14,1.36,1.99,redHighlight);
+  detailBox("headlampOuterBezel",0.47,0.34,0.09,x*1.78,1.66,2.025,black);
+  detailBox("headlampUpperLED",0.34,0.055,0.035,x*1.78,1.76,2.085,lamp);
+  detailBox("headlampLowerLED",0.34,0.055,0.035,x*1.78,1.57,2.085,lamp);
+  detailBox("headlampIndicator",0.11,0.22,0.035,x*1.78+(x>0?-0.16:0.16),1.66,2.09,amber);
+}
+// Distinctive three-point star badge, built from light-weight metal geometry.
+const starCenter=new BABYLON.Vector3(0,2.48,2.16);
+for(let i=0;i<3;i++){
+  const a=-Math.PI/2+i*2*Math.PI/3;
+  const b=a+Math.PI;
+  const p1=starCenter.add(new BABYLON.Vector3(Math.cos(a)*0.105,Math.sin(a)*0.105,0));
+  const p2=starCenter.add(new BABYLON.Vector3(Math.cos(b)*0.105,Math.sin(b)*0.105,0));
+  const line=BABYLON.MeshBuilder.CreateTube("emblemStarArm",{path:[p1,p2],radius:0.018,tessellation:6},scene);
+  line.material=chrome; line.parent=truck;
+}
+const emblemRing=BABYLON.MeshBuilder.CreateTorus("emblemRing",{diameter:0.31,thickness:0.025,tessellation:24},scene);
+emblemRing.position.copyFrom(starCenter); emblemRing.parent=truck; emblemRing.material=chrome;
+// Windshield seals, split glass, wipers and a readable cabin interior.
+detailBox("windshieldSeal",1.98,0.91,0.035,0,2.79,1.89,cabBlack);
+detailBox("windshieldGlassInner",1.82,0.75,0.025,0,2.8,1.918,darkGlass);
+detailBox("windshieldCenterDivider",0.035,0.74,0.03,0,2.8,1.94,black);
+for(const x of [-0.58,0.58]){
+  const wiper=detailBox("windscreenWiper",0.72,0.025,0.025,x,2.38,1.96,black);
+  wiper.rotation.z=x<0?-0.13:0.13;
+  detailBox("wiperPivot",0.07,0.07,0.04,x*0.48,2.4,1.97,satin);
+}
+detailBox("dashboardTop",1.78,0.15,0.56,0,2.37,0.78,dashMat);
+detailBox("dashboardFace",1.68,0.32,0.12,0,2.2,1.03,black);
+for(const x of [-0.48,-0.16,0.16,0.48]){
+  const gauge=BABYLON.MeshBuilder.CreateCylinder("instrumentGauge",{diameter:0.13,height:0.025,tessellation:16},scene);
+  gauge.rotation.x=Math.PI/2; gauge.position.set(x,2.23,1.105); gauge.parent=truck; gauge.material=chrome;
+}
+for(const x of [-0.53,0.53]){
+  detailBox("seatBase",0.58,0.18,0.56,x,1.95,0.1,black);
+  detailBox("seatCushion",0.55,0.18,0.5,x,2.08,0.12,seatMat);
+  detailBox("seatBack",0.55,0.76,0.18,x,2.48,-0.08,seatMat);
+  detailBox("seatHeadrest",0.38,0.22,0.2,x,2.98,-0.09,seatMat);
+}
+const steering=BABYLON.MeshBuilder.CreateTorus("steeringWheel",{diameter:0.43,thickness:0.035,tessellation:24},scene);
+steering.position.set(-0.48,2.42,0.98); steering.rotation.x=Math.PI/2; steering.parent=truck; steering.material=black;
+detailBox("steeringColumn",0.08,0.08,0.35,-0.48,2.3,0.8,black);
+// Door skins, glazing seals, hinges, handles, mirrors and side safety details.
+for(const side of [-1,1]){
+  const x=side*1.105;
+  detailBox("doorLowerInset",0.035,0.72,0.9,x,1.95,0.94,redDark);
+  detailBox("doorUpperBeltline",0.045,0.06,1.2,x*1.01,2.25,0.93,redHighlight);
+  detailBox("doorWindowSeal",0.035,0.83,0.82,x*1.01,2.76,0.98,cabBlack);
+  detailBox("doorWindowGlass",0.025,0.72,0.7,x*1.025,2.77,0.99,darkGlass);
+  detailBox("windowDivider",0.045,0.72,0.035,x*1.04,2.77,0.99,black);
+  detailBox("doorHandleRecess",0.045,0.09,0.26,x*1.035,2.05,1.45,black);
+  detailBox("doorHandleChrome",0.055,0.035,0.18,x*1.06,2.07,1.45,chrome);
+  for(const z of [0.38,1.2]){
+    detailBox("doorHinge",0.055,0.16,0.09,x*1.04,2.24,z,satin);
+  }
+  detailBox("sideRepeater",0.05,0.11,0.22,x*1.05,1.77,1.55,amber);
+  detailBox("sideSkirt",0.12,0.2,1.42,side*1.14,0.91,-0.58,redDark);
+  detailBox("stepUpper",0.62,0.1,0.48,side*1.34,1.02,0.48,satin);
+  detailBox("stepLower",0.62,0.1,0.48,side*1.34,0.76,0.48,black);
+  for(let j=0;j<5;j++) detailBox("stepGrip",0.48,0.025,0.035,side*1.34,1.078,0.3+j*0.085,treadMat);
+  detailBox("fuelTankBand",0.56,0.055,0.06,side*1.19,1.03,-0.35,black);
+  detailBox("fuelTankCap",0.11,0.11,0.06,side*1.2,1.22,-0.82,chrome);
+  detailBox("mirrorLongArm",0.07,0.07,0.62,side*1.2,2.73,1.49,black);
+  detailBox("mirrorHousing",0.34,0.52,0.19,side*1.23,2.83,1.79,black);
+  detailBox("mirrorReflectiveFace",0.27,0.42,0.025,side*1.24,2.83,1.895,chrome);
+  detailBox("mirrorIndicator",0.07,0.12,0.035,side*1.24,2.58,1.9,amber);
+}
+// Roof fairing, marker lamps, antenna and exhaust stack.
+detailBox("roofFairingFront",2.12,0.16,0.32,0,3.38,1.28,redHighlight);
+detailBox("roofFairingRear",1.95,0.12,0.42,0,3.38,0.02,redDark);
+for(let i=0;i<5;i++){
+  const x=-0.8+i*0.4;
+  detailBox("roofLED",0.13,0.07,0.09,x,3.46,1.46,i===2?lamp:amber);
+}
+for(const side of [-1,1]){
+  const stack= BABYLON.MeshBuilder.CreateCylinder("exhaustStack",{diameter:0.15,height:1.15,tessellation:16},scene);
+  stack.position.set(side*1.12,2.05,-1.65); stack.parent=truck; stack.material=satin;
+  const cap=BABYLON.MeshBuilder.CreateCylinder("exhaustTip",{diameter:0.19,height:0.09,tessellation:16},scene);
+  cap.position.set(side*1.12,2.64,-1.65); cap.parent=truck; cap.material=black;
+}
+// Wheel hubs gain lug nuts and sidewall rings; add rear mud flaps.
+for(const side of [-1,1]){
+  for(const z of [-1.72,-0.72,1.0]){
+    const ring=BABYLON.MeshBuilder.CreateTorus("wheelSidewallRing",{diameter:0.78,thickness:0.018,tessellation:24},scene);
+    ring.rotation.y=Math.PI/2; ring.position.set(side*1.39,0.58,z); ring.parent=truck; ring.material=satin;
+  }
+  detailBox("rearMudflap",0.42,0.55,0.07,side*1.18,0.38,-2.05,black);
+}
+
 camera.lockedTarget=truck;
 
 const input={left:false,right:false,gas:false,brake:false};
