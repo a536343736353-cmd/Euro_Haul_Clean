@@ -58,6 +58,59 @@ for(let z=-60;z<620;z+=28){
     box(null,"postReflector",0.18,0.2,0.18,x,0.7,z,amber);
   }
 }
+
+
+// STEP 01/10 — roadside world dressing (lightweight, procedural, offline).
+// The scenery uses built-in Babylon primitives so it adds no network dependency.
+const bark=mat("treeBark","#55402e"), foliageA=mat("foliageDeep","#315b38"), foliageB=mat("foliageLight","#477b43");
+const railMat=mat("guardrailMetal","#aab5b8",0.65), railPostMat=mat("guardrailPost","#68757a",0.45);
+const lampPoleMat=mat("lampPole","#414b50",0.55), signBoardMat=mat("signBoard","#174d39");
+const hillMat=mat("distantHill","#71866d"), hillFarMat=mat("farHill","#879783");
+function sceneryCylinder(name,diameter,height,x,y,z,material,tessellation=8){
+  const mesh=BABYLON.MeshBuilder.CreateCylinder(name,{diameter,height,tessellation},scene);
+  mesh.position.set(x,y,z); mesh.material=material; return mesh;
+}
+function scenerySphere(name,diameter,x,y,z,scale,material,segments=8){
+  const mesh=BABYLON.MeshBuilder.CreateSphere(name,{diameter,segments},scene);
+  mesh.position.set(x,y,z); mesh.scaling.copyFromFloats(scale[0],scale[1],scale[2]); mesh.material=material; return mesh;
+}
+// Distant low-poly hills soften the horizon without expensive terrain textures.
+for(let i=0;i<9;i++){
+  const z=-55+i*78;
+  scenerySphere("distantRollingHill",34+(i%3)*7,-34,1.2,z,[1.25,0.42,1.9],hillFarMat,6);
+  scenerySphere("nearRollingHill",25+(i%4)*4,34,1.0,z+26,[1.1,0.38,1.65],hillMat,6);
+}
+// Tree rows, kept well outside the truck's safe driving corridor.
+for(let z=-42;z<620;z+=54){
+  for(const side of [-1,1]){
+    const x=side*(15+(Math.floor((z+42)/54)%3)*2);
+    sceneryCylinder("roadsideTreeTrunk",0.48,3.0,x,1.5,z,bark,7);
+    scenerySphere("roadsideTreeCanopy",5.0,x,4.1,z,[0.78,0.9,0.78],(Math.floor(z/54)%2===0?foliageA:foliageB),7);
+  }
+}
+// Guardrails use short repeating sections for a continuous highway edge.
+for(let z=-50;z<620;z+=18){
+  for(const side of [-1,1]){
+    box(null,"guardrailBeam",0.16,0.34,17.8,side*7.25,0.92,z+8.9,railMat);
+    for(const pz of [z+1,z+9,z+17]){
+      box(null,"guardrailSupport",0.12,0.9,0.12,side*7.25,0.48,pz,railPostMat);
+    }
+  }
+}
+// Occasional high-mast roadside lights and green direction boards.
+for(let z=18;z<620;z+=126){
+  for(const side of [-1,1]){
+    const x=side*9.1;
+    sceneryCylinder("highwayLightPole",0.16,7.5,x,3.75,z,lampPoleMat,8);
+    box(null,"lightArm",1.25,0.12,0.12,x-side*0.55,7.35,z, lampPoleMat);
+    scenerySphere("lightHousing",0.42,x-side*1.08,7.25,z,[1.5,0.35,0.6],lamp,8);
+    box(null,"directionSign",2.2,1.05,0.12,side*10.1,4.3,z+24,signBoardMat);
+    box(null,"signPost",0.12,2.8,0.12,side*10.1,2.0,z+24,railPostMat);
+    box(null,"signArrowStem",0.82,0.07,0.035,side*10.1,4.35,z+23.98,paint);
+    box(null,"signArrowHead",0.18,0.07,0.035,side*10.48,4.35,z+23.98,paint);
+  }
+}
+
 const truck=new BABYLON.TransformNode("tractor",scene);
 box(truck,"ladderChassis",2.15,0.48,5.25,0,1.05,-0.05,black);
 box(truck,"fuelTank",0.52,0.55,1.5,1.18,0.92,-0.35,rim);
