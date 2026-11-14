@@ -442,7 +442,7 @@ scene.onBeforeRenderObservable.add(()=>{
  const dragForce=0.5*truckPhysics.airDensity*truckPhysics.dragArea*speed*Math.abs(speed);
  const rollingForce=truckPhysics.mass*9.81*truckPhysics.rollingCoefficient*(speed>0?1:speed<0?-1:0);
  const surfaceGrip=weatherMode==="snow"?0.34:weatherMode==="rain"?0.58:0.78;
- const direction=Math.sign(speed);
+ const direction=Math.sign(speed||(reverseGear?-1:1));
  const engineBrake=throttle?0:direction*truckPhysics.mass*(gearIndex===0?0.018:0.032);
  // ABS-style brake modulation prevents a full lock under low-grip rain/snow conditions.
  const requestedBrake=input.brake?truckPhysics.brakeForce:0;
