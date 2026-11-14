@@ -34,6 +34,12 @@ jobs:
           accept-android-sdk-licenses: true
           log-accepted-android-sdk-licenses: false
           packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
+      - name: Restore persistent Android debug signing key
+        id: android-debug-key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: euro-haul-android-debug-keystore-v1
       - name: Extract project
         run: |
           unzip -o Euro_Haul_Step1_Godot_Free.zip -d .
