@@ -59,6 +59,23 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon assembleDebug
+      - name: Verify APK and report package size
+        run: |
+          APK="Euro_Haul_Step1/android/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          unzip -t "$APK"
+          "$ANDROID_HOME/build-tools/34.0.0/zipalign" -c -v 4 "$APK"
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose "$APK"
+          APK_BYTES=$(stat -c%s "$APK")
+          APK_MB=$(awk "BEGIN {printf \"%.2f\", $APK_BYTES/1048576}")
+          echo "APK_SIZE_BYTES=$APK_BYTES" >> "$GITHUB_STEP_SUMMARY"
+          echo "APK_SIZE_MB=$APK_MB MB" >> "$GITHUB_STEP_SUMMARY"
+          echo "APK SHA-256:" >> "$GITHUB_STEP_SUMMARY"
+          sha256sum "$APK" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$APK_BYTES" -gt 734003200 ]; then
+            echo "APK exceeds the 700 MiB project limit" >&2
+            exit 1
+          fi
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
