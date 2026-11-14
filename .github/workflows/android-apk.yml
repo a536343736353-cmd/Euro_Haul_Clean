@@ -106,6 +106,10 @@ jobs:
           TRUCK_MODEL_MB=$(awk "BEGIN {printf \"%.2f\", $TRUCK_MODEL_BYTES/1048576}")
           echo "- Additional long-haul tractor/trailer/yard GLBs: $TRUCK_MODEL_COUNT ($TRUCK_MODEL_MB MB)" >> "$GITHUB_STEP_SUMMARY"
           echo "- Actual APK file: $APK_MB MB ($APK_BYTES bytes)" >> "$GITHUB_STEP_SUMMARY"
+          TOTAL_ASSET_BYTES=$((ASSET_BYTES + TRUCK_MODEL_BYTES))
+          TOTAL_ASSET_MB=$(awk "BEGIN {printf \"%.2f\", $TOTAL_ASSET_BYTES/1048576}")
+          echo "- Total uncompressed 3D model payload: $TOTAL_ASSET_MB MB ($TOTAL_ASSET_BYTES bytes)" >> "$GITHUB_STEP_SUMMARY"
+          echo "MEASURED_APK=$APK_MB MiB ($APK_BYTES bytes); Kenney_models=$MODEL_COUNT; longhaul_models=$TRUCK_MODEL_COUNT; 3D_payload=$TOTAL_ASSET_MB MiB"
           if [ "$MODEL_COUNT" -lt 400 ]; then
             echo "Expected 400+ GLB files inside APK; found $MODEL_COUNT" >&2
             exit 1
