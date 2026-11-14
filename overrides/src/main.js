@@ -441,13 +441,13 @@ scene.onBeforeRenderObservable.add(()=>{
  const driveForce=(reverseGear?-1:1)*throttle*truckPhysics.peakTorque*rpmBand*ratio*truckPhysics.finalDrive*0.9/truckPhysics.wheelRadius*damageFactor;
  const dragForce=0.5*truckPhysics.airDensity*truckPhysics.dragArea*speed*Math.abs(speed);
  const rollingForce=truckPhysics.mass*9.81*truckPhysics.rollingCoefficient*(speed>0?1:speed<0?-1:0);
+ const surfaceGrip=weatherMode==="snow"?0.34:weatherMode==="rain"?0.58:0.78;
  const direction=Math.sign(speed);
  const engineBrake=throttle?0:direction*truckPhysics.mass*(gearIndex===0?0.018:0.032);
  // ABS-style brake modulation prevents a full lock under low-grip rain/snow conditions.
  const requestedBrake=input.brake?truckPhysics.brakeForce:0;
  const absFactor=input.brake&&Math.abs(speed)>1?Math.max(0.42,1-(1-surfaceGrip)*0.48):1;
- const serviceBrake=direction* Math.min(requestedBrake*absFactor,truckPhysics.mass*9.81*surfaceGrip);
- const surfaceGrip=weatherMode==="snow"?0.34:weatherMode==="rain"?0.58:0.78;
+ const serviceBrake=direction*Math.min(requestedBrake*absFactor,truckPhysics.mass*9.81*surfaceGrip);
  speed=BABYLON.Scalar.Clamp(speed+(driveForce-dragForce-rollingForce-engineBrake-serviceBrake)/truckPhysics.mass*dt,-5,32);
  const steerTarget=input.left?-1:input.right?1:0;
  steerValue+=(steerTarget-steerValue)*Math.min(4.8*dt,1);
