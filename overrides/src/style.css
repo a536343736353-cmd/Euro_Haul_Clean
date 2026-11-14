@@ -15,3 +15,8 @@ button{border:2px solid #ffffffaa;background:#101820cc;color:#fff;border-radius:
 button:active{transform:scale(.95);filter:brightness(1.3)}
 #loading{position:absolute;inset:0;display:grid;place-items:center;color:#fff;background:#101820;font-weight:bold}
 @media(min-width:800px){#controls{max-width:900px;margin:auto}}
+
+/* Stages 4–10: responsive simulator control panel */
+#careerHud{top:112px!important}
+#controls{padding-bottom:max(28px,env(safe-area-inset-bottom))}
+#panelOpen{font-size:10px;min-height:38px}
