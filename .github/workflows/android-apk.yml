@@ -38,6 +38,21 @@ jobs:
         run: |
           unzip -o Euro_Haul_Step1_Godot_Free.zip -d .
           test -f Euro_Haul_Step1/package.json
+      - name: Download pinned Kenney CC0 3D asset packs
+        run: |
+          git clone --filter=blob:none --no-checkout https://github.com/Hidencod/tge-assets.git /tmp/kenney-library
+          cd /tmp/kenney-library
+          git sparse-checkout init --cone
+          git sparse-checkout set packs/car-kit packs/city-kit-roads packs/city-kit-commercial packs/nature-kit
+          git checkout 3ddcc695adbba9fb918cf31b7c139b3f95b76910
+          cd "$GITHUB_WORKSPACE"
+          mkdir -p Euro_Haul_Step1/public/assets/kenney
+          cp -a /tmp/kenney-library/packs/. Euro_Haul_Step1/public/assets/kenney/
+          curl -fsSL https://raw.githubusercontent.com/Hidencod/tge-assets/3ddcc695adbba9fb918cf31b7c139b3f95b76910/LICENSE -o Euro_Haul_Step1/public/assets/kenney/LICENSE.txt
+          MODEL_COUNT=$(find Euro_Haul_Step1/public/assets/kenney -type f -name '*.glb' | wc -l)
+          ASSET_BYTES=$(du -sb Euro_Haul_Step1/public/assets/kenney | cut -f1)
+          echo "Downloaded $MODEL_COUNT CC0 GLB models ($ASSET_BYTES bytes)"
+          test "$MODEL_COUNT" -ge 400
       - name: Apply upgraded game files
         run: |
           cp overrides/src/main.js Euro_Haul_Step1/src/main.js
@@ -45,6 +60,11 @@ jobs:
       - name: Install dependencies
         working-directory: Euro_Haul_Step1
         run: npm install
+      - name: Install matching Babylon GLB loader
+        working-directory: Euro_Haul_Step1
+        run: |
+          BABYLON_VERSION=$(node -p "require('./node_modules/babylonjs/package.json').version")
+          npm install --save-exact "babylonjs-loaders@$BABYLON_VERSION"
       - name: Build Babylon.js game
         working-directory: Euro_Haul_Step1
         run: npm run build
@@ -68,6 +88,20 @@ jobs:
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose "$APK"
           APK_BYTES=$(stat -c%s "$APK")
           APK_MB=$(awk "BEGIN {printf \"%.2f\", $APK_BYTES/1048576}")
+          MODEL_COUNT=$(unzip -l "$APK" | awk '$4 ~ /kenney\/.*\.glb$/ {count++} END {print count+0}')
+          ASSET_BYTES=$(unzip -l "$APK" | awk '$4 ~ /kenney\/.*\.glb$/ {sum+=$1} END {print sum+0}')
+          ASSET_MB=$(awk "BEGIN {printf \"%.2f\", $ASSET_BYTES/1048576}")
+          echo "## Packaged game content" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Kenney CC0 GLB models packaged: $MODEL_COUNT" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Uncompressed GLB payload: $ASSET_MB MB ($ASSET_BYTES bytes)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Actual APK file: $APK_MB MB ($APK_BYTES bytes)" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$MODEL_COUNT" -lt 400 ]; then
+            echo "Expected 400+ GLB files inside APK; found $MODEL_COUNT" >&2
+            exit 1
+          fi
+          if [ "$APK_BYTES" -lt 419430400 ]; then
+            echo "400 MiB content target not reached; no filler data has been added." >> "$GITHUB_STEP_SUMMARY"
+          fi
           echo "APK_SIZE_BYTES=$APK_BYTES" >> "$GITHUB_STEP_SUMMARY"
           echo "APK_SIZE_MB=$APK_MB MB" >> "$GITHUB_STEP_SUMMARY"
           echo "APK SHA-256:" >> "$GITHUB_STEP_SUMMARY"
