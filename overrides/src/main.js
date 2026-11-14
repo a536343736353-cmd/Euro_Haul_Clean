@@ -304,6 +304,7 @@ bindButton("accelerate","gas"); bindButton("brake","brake");
 let speed=0,steerValue=0,odometer=0;
 const truckPhysics={mass:28000,wheelRadius:0.52,wheelbase:5.8,finalDrive:1.9,gearRatios:[12.0,8.0,5.5,3.8,2.7,2.05],peakTorque:2050,maxRpm:2300,idleRpm:650,brakeForce:185000,rollingCoefficient:0.006,dragArea:7.2,airDensity:1.225,tyreGrip:0.72};
 let engineLoad=0,trailerArticulation=0,offRoadTime=0;
+const suspensionStates=wheels.map(mesh=>({mesh,restY:mesh.position.y,offset:0,velocity:0}));
 
 
 // STEP 03/10 — moving highway traffic with reusable low-poly cars and lorries.
@@ -334,7 +335,7 @@ function buildTrafficVehicle(index,kind,color,x,z,direction,cruise){
     box(root,"trafficHeadlamp",0.28,0.16,0.06,side*width*0.34,1.0,length*0.37,trafficLamp);
     box(root,"trafficTailLamp",0.22,0.22,0.06,side*width*0.36,0.98,-length*0.37,tail);
   }
-  trafficUnits.push({root,direction,cruise,halfWidth:width/2,kind});
+  trafficUnits.push({root,direction,cruise,halfWidth:width/2,kind,wheels:root.getChildMeshes(false).filter(m=>/wheel|tyre|tire/i.test(m.name))});
 }
 const trafficColors=[trafficBlue,trafficSilver,trafficYellow,red,white];
 for(let i=0;i<10;i++){
@@ -348,6 +349,7 @@ let lastTrafficNotice=0;
 function updateTraffic(dt,now){
   for(const unit of trafficUnits){
     unit.root.position.z+=unit.direction*unit.cruise*dt;
+    unit.wheels?.forEach(w=>w.rotation.x+=unit.cruise*dt/0.42);
     const relative=unit.root.position.z-truck.position.z;
     if(relative>210)unit.root.position.z=truck.position.z-190-(Math.random()*35);
     if(relative< -210)unit.root.position.z=truck.position.z+190+(Math.random()*35);
@@ -440,7 +442,8 @@ scene.onBeforeRenderObservable.add(()=>{
  const dragForce=0.5*truckPhysics.airDensity*truckPhysics.dragArea*speed*Math.abs(speed);
  const rollingForce=truckPhysics.mass*9.81*truckPhysics.rollingCoefficient*(speed>0?1:speed<0?-1:0);
  const engineBrake=throttle?0:(speed>0?truckPhysics.mass*(gearIndex===0?0.018:0.032):0);
- const serviceBrake=input.brake?truckPhysics.brakeForce:0;
+ const surfaceGrip=weatherMode==="snow"?0.34:weatherMode==="rain"?0.58:0.78;
+ const serviceBrake=input.brake?Math.min(truckPhysics.brakeForce,truckPhysics.mass*9.81*surfaceGrip):0;
  speed=Math.max(0,Math.min(32,speed+(driveForce-dragForce-rollingForce-engineBrake-serviceBrake)/truckPhysics.mass*dt));
  const steerTarget=input.left?-1:input.right?1:0;
  steerValue+=(steerTarget-steerValue)*Math.min(4.8*dt,1);
@@ -455,6 +458,21 @@ scene.onBeforeRenderObservable.add(()=>{
   if(offRoadTime>1.2&&Math.random()<dt*0.8){vehicleDamage=Math.min(100,vehicleDamage+0.35);if(performance.now()-lastTrafficNotice>2400){showToast("OFF-ROAD DAMAGE • RETURN TO THE HIGHWAY");lastTrafficNotice=performance.now();}}
  }else offRoadTime=0;
  truck.position.x=BABYLON.Scalar.Clamp(truck.position.x,-5.7,5.7);
+ const roadRipple=Math.sin(truck.position.z*0.055)*0.018+Math.sin(truck.position.z*0.17)*0.008;
+ const brakeDive=input.brake?0.028:0,accelerationSquat=throttle?-0.012:0;
+ for(const state of suspensionStates){
+  const axleRipple=roadRipple+Math.sin((truck.position.z+state.mesh.position.z)*0.13)*0.012;
+  const lateralTransfer=state.mesh.position.x*steerValue*speed*0.00065;
+  const target=axleRipple+brakeDive+accelerationSquat+lateralTransfer;
+  const springAcceleration=(target-state.offset)*180-state.velocity*24;
+  state.velocity+=springAcceleration*dt;state.offset=BABYLON.Scalar.Clamp(state.offset+state.velocity*dt,-0.09,0.09);
+  state.mesh.position.y=state.restY+state.offset;
+ }
+ const meanCompression=suspensionStates.reduce((sum,state)=>sum+state.offset,0)/suspensionStates.length;
+ const frontCompression=suspensionStates.filter(state=>state.mesh.position.z>0).reduce((sum,state)=>sum+state.offset,0)/2;
+ const rearCompression=suspensionStates.filter(state=>state.mesh.position.z<=0).reduce((sum,state)=>sum+state.offset,0)/4;
+ truck.position.y=-meanCompression*0.24;
+ truck.rotation.x=BABYLON.Scalar.Clamp((rearCompression-frontCompression)*0.28,-0.035,0.035);
  truck.rotation.z=-steerValue*Math.min(speed/32,1)*0.035;
  trailerArticulation+=(BABYLON.Scalar.Clamp(-yawRate*0.62,-0.32,0.32)-trailerArticulation)*Math.min(dt*1.6,1);
  trailer.rotation.y=trailerArticulation;
@@ -591,11 +609,11 @@ async function placeKenneyModel(pack,file,x,y,z,scale=1,rotation=0){
 }
 async function addKenneyTraffic(file,x,z,direction,cruise,scale=1.5){
  const root=await placeKenneyModel("car-kit",file,x,0,z,scale,direction<0?Math.PI:0);
- if(root)trafficUnits.push({root,direction,cruise,halfWidth:1.1,kind:"licensed-model"});
+ if(root)trafficUnits.push({root,direction,cruise,halfWidth:1.1,kind:"licensed-model",wheels:root.getChildMeshes(false).filter(m=>/wheel|tyre|tire/i.test(m.name))});
 }
 async function addLongHaulTraffic(file,x,z,direction,cruise,scale=1){
  const root=await placeKenneyModel("longhaul",file,x,0,z,scale,direction<0?Math.PI:0);
- if(root)trafficUnits.push({root,direction,cruise,halfWidth:1.35,kind:"semi-truck"});
+ if(root)trafficUnits.push({root,direction,cruise,halfWidth:1.35,kind:"semi-truck",wheels:root.getChildMeshes(false).filter(m=>/wheel|tyre|tire/i.test(m.name))});
 }
 async function loadCarParkTraffic(){
  try{
@@ -606,7 +624,7 @@ async function loadCarParkTraffic(){
   const jobs=chosen.map(async(a,i)=>{
    const direction=i%2===0?-1:1,lane=direction<0?-3.05:3.05;
    const root=await placeKenneyModel("carpark",a.slug+".glb",lane,0,truck.position.z+410+i*22,1,direction<0?Math.PI:0);
-   if(root)trafficUnits.push({root,direction,cruise:10+(i%4)*1.3,halfWidth:1.2,kind:"city-fleet"});
+   if(root)trafficUnits.push({root,direction,cruise:10+(i%4)*1.3,halfWidth:1.2,kind:"city-fleet",wheels:root.getChildMeshes(false).filter(m=>/wheel|tyre|tire/i.test(m.name))});
   });
   await Promise.all(jobs);console.info("Imported city traffic models:",chosen.length);
  }catch(error){console.warn("City fleet manifest unavailable",error);}
