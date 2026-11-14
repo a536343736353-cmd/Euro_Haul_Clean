@@ -586,8 +586,8 @@ async function loadKenneyTemplate(pack,file){
 }
 async function placeKenneyModel(pack,file,x,y,z,scale=1,rotation=0){
  const template=await loadKenneyTemplate(pack,file);if(!template)return null;
- const clone=template.clone("kenney_"+pack+"_"+file+"_"+Math.round(x)+"_"+Math.round(z),null,true);if(!clone)return null;
- clone.setEnabled(true);clone.position.set(x,y,z);clone.rotation.y=rotation;clone.scaling.scaleInPlace(scale);return clone;
+ const clone=template.clone("kenney_"+pack+"_"+file+"_"+Math.round(x)+"_"+Math.round(z),null,false);if(!clone)return null;
+ clone.setEnabled(true);clone.position.set(x,y,z);clone.rotationQuaternion=null;clone.rotation.y=rotation;clone.scaling.scaleInPlace(scale);return clone;
 }
 async function addKenneyTraffic(file,x,z,direction,cruise,scale=1.5){
  const root=await placeKenneyModel("car-kit",file,x,0,z,scale,direction<0?Math.PI:0);
