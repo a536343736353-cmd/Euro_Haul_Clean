@@ -5,6 +5,10 @@ on:
     branches: [main]
     paths:
       - 'overrides/**'
+      - 'assets/**'
+      - 'src/**'
+      - 'PROJECT_STRUCTURE.md'
+      - 'ASSET_SOURCES.md'
       - '.github/workflows/android-apk.yml'
       - 'Euro_Haul_Step1_Godot_Free.zip'
   workflow_dispatch:
