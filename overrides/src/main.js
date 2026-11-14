@@ -577,7 +577,8 @@ scene.onBeforeRenderObservable.add(()=>{
 const kenneyTemplates=new Map();
 async function loadKenneyTemplate(pack,file){
  const key=pack+"/"+file;if(kenneyTemplates.has(key))return kenneyTemplates.get(key);
- const promise=BABYLON.SceneLoader.ImportMeshAsync("","/assets/kenney/"+pack+"/",file,scene).then(result=>{
+ const assetRoot=pack==="longhaul"?"/assets/longhaul/":"/assets/kenney/"+pack+"/";
+ const promise=BABYLON.SceneLoader.ImportMeshAsync("",assetRoot,file,scene).then(result=>{
   const root=(result.rootNodes&&result.rootNodes[0])||(result.transformNodes&&result.transformNodes[0])||(result.meshes&&result.meshes[0]);
   if(!root)throw new Error("Missing model root "+key);root.setEnabled(false);return root;
  }).catch(error=>{console.warn("Kenney model load failed",key,error);return null;});
@@ -592,9 +593,17 @@ async function addKenneyTraffic(file,x,z,direction,cruise,scale=1.5){
  const root=await placeKenneyModel("car-kit",file,x,0,z,scale,direction<0?Math.PI:0);
  if(root)trafficUnits.push({root,direction,cruise,halfWidth:1.1,kind:"licensed-model"});
 }
+async function addLongHaulTraffic(file,x,z,direction,cruise,scale=1){
+ const root=await placeKenneyModel("longhaul",file,x,0,z,scale,direction<0?Math.PI:0);
+ if(root)trafficUnits.push({root,direction,cruise,halfWidth:1.35,kind:"semi-truck"});
+}
 async function loadKenneyWorld(){
  const jobs=[
-  addKenneyTraffic("sedan.glb",-3.05,truck.position.z+125,-1,13),
+  addKenneyTraffic("sedan.glb",-3.05,truck.position.z+125,-1,13),  addLongHaulTraffic("cabover-sleeper.glb",-3.05,truck.position.z+305,-1,10,1.0),
+  addLongHaulTraffic("long-nose-sleeper.glb",3.05,truck.position.z+355,1,11,1.0),
+  placeKenneyModel("longhaul","dry-van-trailer.glb",19,0,430,0.8,Math.PI/2),
+  placeKenneyModel("longhaul","truck-stop-yard.glb",20,0,535,0.62,0),
+
   addKenneyTraffic("suv.glb",3.05,truck.position.z+165,1,11),
   addKenneyTraffic("delivery.glb",-3.05,truck.position.z+215,-1,12,1.4),
   addKenneyTraffic("truck-flat.glb",3.05,truck.position.z+255,1,10,1.5)
