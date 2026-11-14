@@ -300,15 +300,15 @@ function bindButton(id,key){
 }
 bindButton("left","left"); bindButton("right","right");
 bindButton("accelerate","gas"); bindButton("brake","brake");
-let speed=0,steering=0,odometer=0;
+let speed=0,steerValue=0,odometer=0;
 scene.onBeforeRenderObservable.add(()=>{
  const dt=Math.min(engine.getDeltaTime()/1000,0.05);
  if(input.gas)speed=Math.min(speed+4.6*dt,19);
  else speed=Math.max(speed-0.85*dt,0);
  if(input.brake)speed=Math.max(speed-10*dt,0);
  const steerTarget=input.left?-0.5:input.right?0.5:0;
- steering+=(steerTarget-steering)*Math.min(5*dt,1);
- truck.rotation.y+=steering*speed*0.014*dt;
+ steerValue+=(steerTarget-steerValue)*Math.min(5*dt,1);
+ truck.rotation.y+=steerValue*speed*0.014*dt;
  truck.position.x+=Math.sin(truck.rotation.y)*speed*dt;
  truck.position.z+=Math.cos(truck.rotation.y)*speed*dt;
  truck.position.x=BABYLON.Scalar.Clamp(truck.position.x,-4.2,4.2);
