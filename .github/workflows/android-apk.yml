@@ -9,6 +9,7 @@ permissions:
 
 jobs:
   build:
+    name: Build Euro Haul Android APK
     runs-on: ubuntu-latest
 
     steps:
@@ -24,36 +25,48 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: '17'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
 
-      - name: Extract project ZIP
+      - name: Check project ZIP
+        run: |
+          test -f Euro_Haul_Step1_Godot_Free.zip
+          echo "Project ZIP found"
+
+      - name: Extract Euro Haul project
         run: |
           unzip -o Euro_Haul_Step1_Godot_Free.zip -d .
-          ls -la
+          test -f package.json
+          test -f capacitor.config.json
+          echo "Project files found"
 
       - name: Install dependencies
         run: npm install
 
-      - name: Build game
+      - name: Build Babylon.js game
         run: npm run build
 
-      - name: Prepare Android project
-        run: |
-          npx cap add android
-          npx cap sync android
+      - name: Add Android platform
+        run: npx cap add android
 
-      - name: Build APK
+      - name: Sync Android project
+        run: npx cap sync android
+
+      - name: Build Android APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew --no-daemon assembleDebug
 
-      - name: Upload APK
+      - name: Upload Euro Haul APK
         uses: actions/upload-artifact@v4
         with:
           name: Euro-Haul-Android-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
-          
+          if-no-files-found: error
