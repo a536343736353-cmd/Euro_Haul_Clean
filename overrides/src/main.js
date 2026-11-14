@@ -831,7 +831,7 @@ showMenuPage=function(page){
   const cards=freightContracts.map(c=>
     '<button class="eh-contract-card" data-contract="'+c.id+'">'+
     '<strong>'+c.name+'</strong><span>'+c.cargo+'</span>'+
-    '<span>'+Math.round(c.mass/1000)+' t cargo • '+c.distance+' km route</span>'+
+    '<span>'+Math.round(c.mass/1000)+' t cargo • '+c.distance+' m route</span>'+
     '<b>PAY €'+c.reward.toLocaleString()+'</b></button>'
   ).join("");
   menuDetail.innerHTML=
