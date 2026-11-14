@@ -438,13 +438,17 @@ scene.onBeforeRenderObservable.add(()=>{
  const rpmBand=BABYLON.Scalar.Clamp(1-Math.abs(estimatedRpm-1550)/1050,0.22,1);
  const damageFactor=1-BABYLON.Scalar.Clamp((vehicleDamage||0)/150,0,0.72);
  const throttle=input.gas&&fuel>0?1:0;
- const driveForce=throttle*truckPhysics.peakTorque*rpmBand*ratio*truckPhysics.finalDrive*0.9/truckPhysics.wheelRadius*damageFactor;
+ const driveForce=(reverseGear?-1:1)*throttle*truckPhysics.peakTorque*rpmBand*ratio*truckPhysics.finalDrive*0.9/truckPhysics.wheelRadius*damageFactor;
  const dragForce=0.5*truckPhysics.airDensity*truckPhysics.dragArea*speed*Math.abs(speed);
  const rollingForce=truckPhysics.mass*9.81*truckPhysics.rollingCoefficient*(speed>0?1:speed<0?-1:0);
- const engineBrake=throttle?0:(speed>0?truckPhysics.mass*(gearIndex===0?0.018:0.032):0);
+ const direction=Math.sign(speed);
+ const engineBrake=throttle?0:direction*truckPhysics.mass*(gearIndex===0?0.018:0.032);
+ // ABS-style brake modulation prevents a full lock under low-grip rain/snow conditions.
+ const requestedBrake=input.brake?truckPhysics.brakeForce:0;
+ const absFactor=input.brake&&Math.abs(speed)>1?Math.max(0.42,1-(1-surfaceGrip)*0.48):1;
+ const serviceBrake=direction* Math.min(requestedBrake*absFactor,truckPhysics.mass*9.81*surfaceGrip);
  const surfaceGrip=weatherMode==="snow"?0.34:weatherMode==="rain"?0.58:0.78;
- const serviceBrake=input.brake?Math.min(truckPhysics.brakeForce,truckPhysics.mass*9.81*surfaceGrip):0;
- speed=Math.max(0,Math.min(32,speed+(driveForce-dragForce-rollingForce-engineBrake-serviceBrake)/truckPhysics.mass*dt));
+ speed=BABYLON.Scalar.Clamp(speed+(driveForce-dragForce-rollingForce-engineBrake-serviceBrake)/truckPhysics.mass*dt,-5,32);
  const steerTarget=input.left?-1:input.right?1:0;
  steerValue+=(steerTarget-steerValue)*Math.min(4.8*dt,1);
  let yawRate=(speed/truckPhysics.wheelbase)*Math.tan(steerValue*0.48);
@@ -477,7 +481,7 @@ scene.onBeforeRenderObservable.add(()=>{
  trailerArticulation+=(BABYLON.Scalar.Clamp(-yawRate*0.62,-0.32,0.32)-trailerArticulation)*Math.min(dt*1.6,1);
  trailer.rotation.y=trailerArticulation;
  wheels.forEach(w=>w.rotation.x+=speed*dt/truckPhysics.wheelRadius);
- odometer+=speed*dt;
+ odometer+=Math.abs(speed)*dt;
  const remaining=destinationZ-truck.position.z;
  if(remaining<=5&&remaining>=-5&&speed<2.8){
   career.deliveries+=1;career.cash+=750;saveCareer();destinationZ+=260;destination.position.z=destinationZ;showToast("DELIVERY COMPLETE  +€750");
@@ -523,6 +527,8 @@ function updateWorld(dt){
 const cockpitCamera=new BABYLON.UniversalCamera("cockpitCamera",new BABYLON.Vector3(0,3.02,0.48),scene);
 cockpitCamera.parent=truck;cockpitCamera.fov=0.92;cockpitCamera.minZ=0.08;cockpitCamera.inputs.clear();
 let cockpitMode=false,headlightsOn=false,gear=1,fuel=100,engineRpm=750,vehicleDamage=0,selectedPaint=0;
+let reverseGear=false,automaticTransmission=true,cargoLoadKg=0;
+const cargoLoads=[0,12000,26000],cargoLabels=["EMPTY","12 TONNES","26 TONNES"];
 const cabPaints=["#b92720","#245b91","#d5d7d5","#d1a52d"].map((v,i)=>mat("cabPaint"+i,v,0.25));
 function repaintTruck(){
  selectedPaint=(selectedPaint+1)%cabPaints.length;
@@ -533,13 +539,16 @@ function repaintTruck(){
 }
 let distanceBonus=0,systemsRefreshAt=0;
 const panel=document.createElement("div");panel.id="haulPanel";
-panel.innerHTML='<div class="panelHead">EURO HAUL • DRIVER CENTRE</div><div class="panelGrid"><button id="viewToggle">COCKPIT VIEW</button><button id="weatherToggle">WEATHER: CLEAR</button><button id="gearToggle">GEAR: 1</button><button id="lampToggle">LIGHTS: OFF</button><button id="paintToggle">CHANGE PAINT</button><button id="serviceToggle">SERVICE €250</button><button id="fuelToggle">REFUEL €100</button><button id="closePanel">CLOSE</button></div><div id="systemReadout"></div>';
+panel.innerHTML='<div class="panelHead">EURO HAUL • DRIVER CENTRE</div><div class="panelGrid"><button id="viewToggle">COCKPIT VIEW</button><button id="weatherToggle">WEATHER: CLEAR</button><button id="gearToggle">GEAR: 1</button><button id="reverseToggle">REVERSE: OFF</button><button id="transmissionToggle">AUTO: ON</button><button id="loadToggle">CARGO: EMPTY</button><button id="lampToggle">LIGHTS: OFF</button><button id="paintToggle">CHANGE PAINT</button><button id="serviceToggle">SERVICE €250</button><button id="fuelToggle">REFUEL €100</button><button id="closePanel">CLOSE</button></div><div id="systemReadout"></div>';
 document.body.appendChild(panel);
 const openPanel=document.createElement("button");openPanel.id="panelOpen";openPanel.textContent="GARAGE / OPTIONS";document.body.appendChild(openPanel);
 const readout=document.getElementById("systemReadout");
 function refreshSystems(){
- readout.textContent="ENGINE "+Math.round(engineRpm)+" RPM • FUEL "+Math.round(fuel)+"% • DAMAGE "+Math.round(vehicleDamage)+"% • GEAR "+gear;
+ readout.textContent="ENGINE "+Math.round(engineRpm)+" RPM • FUEL "+Math.round(fuel)+"% • DAMAGE "+Math.round(vehicleDamage)+"% • GEAR "+(reverseGear?"R":gear)+" • LOAD "+Math.round(cargoLoadKg/1000)+" t";
  document.getElementById("gearToggle").textContent="GEAR: "+gear;
+ document.getElementById("reverseToggle").textContent="REVERSE: "+(reverseGear?"ON":"OFF");
+ document.getElementById("transmissionToggle").textContent=automaticTransmission?"AUTO: ON":"MANUAL: ON";
+ document.getElementById("loadToggle").textContent="CARGO: "+cargoLabels[cargoLoads.indexOf(cargoLoadKg)];
  document.getElementById("lampToggle").textContent="LIGHTS: "+(headlightsOn?"ON":"OFF");
  document.getElementById("weatherToggle").textContent="WEATHER: "+weatherMode.toUpperCase();
 }
@@ -552,7 +561,16 @@ document.getElementById("viewToggle").addEventListener("click",()=>{
 document.getElementById("weatherToggle").addEventListener("click",()=>{
  const modes=["clear","rain","snow","fog"];setWeather(modes[(modes.indexOf(weatherMode)+1)%modes.length]);refreshSystems();
 });
-document.getElementById("gearToggle").addEventListener("click",()=>{gear=gear>=6?1:gear+1;refreshSystems();});
+document.getElementById("gearToggle").addEventListener("click",()=>{if(!automaticTransmission&&!reverseGear)gear=gear>=6?1:gear+1;refreshSystems();});
+document.getElementById("reverseToggle").addEventListener("click",()=>{
+ if(Math.abs(speed)>0.8){showToast("STOP BEFORE SELECTING REVERSE");return;}
+ reverseGear=!reverseGear;input.gas=false;refreshSystems();showToast(reverseGear?"REVERSE SELECTED":"FORWARD DRIVE");
+});
+document.getElementById("transmissionToggle").addEventListener("click",()=>{automaticTransmission=!automaticTransmission;refreshSystems();showToast(automaticTransmission?"AUTOMATIC TRANSMISSION":"MANUAL TRANSMISSION");});
+document.getElementById("loadToggle").addEventListener("click",()=>{
+ const index=(cargoLoads.indexOf(cargoLoadKg)+1)%cargoLoads.length;cargoLoadKg=cargoLoads[index];truckPhysics.mass=28000+cargoLoadKg;
+ refreshSystems();showToast("CARGO LOAD: "+cargoLabels[index]+" • GROSS "+Math.round(truckPhysics.mass/1000)+" t");
+});
 document.getElementById("lampToggle").addEventListener("click",()=>{
  headlightsOn=!headlightsOn;
  truck.getChildMeshes(false).filter(m=>["headlamp","headlampUpperLED","headlampLowerLED"].includes(m.name)).forEach(m=>m.material=headlightsOn?lamp:black);
@@ -580,6 +598,10 @@ document.head.appendChild(panelStyle);
 function updateVehicleSystems(dt){
  const ratio=truckPhysics.gearRatios[Math.max(0,Math.min(5,(gear||1)-1))];
  const wheelRpm=Math.abs(speed)/truckPhysics.wheelRadius*60/(Math.PI*2);
+ if(automaticTransmission&&!reverseGear){
+  if(engineRpm>2050&&gear<6)gear++;
+  else if(engineRpm<900&&gear>1)gear--;
+ }
  engineRpm=BABYLON.Scalar.Clamp(wheelRpm*ratio*truckPhysics.finalDrive+(input.gas?120:0),truckPhysics.idleRpm,truckPhysics.maxRpm);
  engineLoad=input.gas&&fuel>0?Math.min(1,0.35+speed/38):0.08;
  if(input.gas&&fuel>0)fuel=Math.max(0,fuel-dt*(0.012+speed*0.0018+engineLoad*0.014));
