@@ -446,6 +446,114 @@ scene.onBeforeRenderObservable.add(()=>{
  updateCareerHud(performance.now());
  updateTraffic(dt,performance.now());
 });
+
+/* STAGES 04–10: weather, cockpit, vehicle systems, depot world, garage and career. */
+const depotMat=mat("depotConcrete","#777d7c"), depotRoof=mat("depotRoof","#713f32"), depotGlass=mat("depotGlass","#344b57",0.1,0.25,0.9);
+for(let i=0;i<8;i++)for(const side of [-1,1]){
+ const x=side*(24+(i%3)*3),z=35+i*72;
+ box(null,"EuropeanFreightDepot",12,6.5,18,x,3.25,z,depotMat);
+ box(null,"DepotRoof",12.5,0.35,18.5,x,6.65,z,depotRoof);
+ for(let w=-1;w<=1;w++)box(null,"DepotWindow",0.12,1.35,2.1,x-side*6.05,3.9,z+w*5,depotGlass);
+ box(null,"DepotLoadingBay",0.16,3.2,3.3,x-side*6.12,1.9,z+3,black);
+}
+let timeOfDay=0.38,weatherMode="clear",weatherClock=0;
+const rainMat=mat("rainStreak","#b8d5e8",0,0.15,0.48),snowMat=mat("snowParticle","#edf5ff",0,0.2,0.8);
+const rainDrops=[],snowDrops=[];
+for(let i=0;i<65;i++){
+ const p=BABYLON.MeshBuilder.CreateBox("rainDrop",{width:0.018,height:0.55,depth:0.018},scene);p.material=rainMat;p.isVisible=false;rainDrops.push(p);
+}
+for(let i=0;i<40;i++){
+ const p=BABYLON.MeshBuilder.CreateSphere("snowFlake",{diameter:0.075,segments:5},scene);p.material=snowMat;p.isVisible=false;snowDrops.push(p);
+}
+function setWeather(mode){
+ weatherMode=mode;rainDrops.forEach(p=>p.isVisible=mode==="rain");snowDrops.forEach(p=>p.isVisible=mode==="snow");
+ scene.fogDensity=mode==="fog"?0.009:mode==="rain"?0.003:0.0018;showToast("WEATHER: "+mode.toUpperCase());
+}
+function updateWorld(dt){
+ timeOfDay=(timeOfDay+dt/360)%1;
+ const daylight=Math.max(0.12,Math.sin(timeOfDay*Math.PI*2-Math.PI/2)*0.5+0.5);
+ sun.intensity=0.18+daylight*0.92;fill.intensity=0.08+daylight*0.42;
+ const sky=new BABYLON.Color3(0.035+0.48*daylight,0.055+0.64*daylight,0.11+0.72*daylight);
+ scene.clearColor=new BABYLON.Color4(sky.r,sky.g,sky.b,1);scene.fogColor=sky;weatherClock+=dt;
+ if(weatherMode==="rain"||weatherMode==="snow"){
+  for(const p of (weatherMode==="rain"?rainDrops:snowDrops)){
+   if(!p.isVisible||p.position.y<0.2)p.position.set(truck.position.x+(Math.random()-.5)*24,7+Math.random()*7,truck.position.z+(Math.random()-.5)*35);
+   else{p.position.y-=dt*(weatherMode==="rain"?17:3.2);p.position.z-=dt*(weatherMode==="rain"?speed+5:1.5);}
+  }
+ }
+}
+const cockpitCamera=new BABYLON.UniversalCamera("cockpitCamera",new BABYLON.Vector3(0,3.02,0.48),scene);
+cockpitCamera.parent=truck;cockpitCamera.fov=0.92;cockpitCamera.minZ=0.08;cockpitCamera.inputs.clear();
+let cockpitMode=false,headlightsOn=false,gear=1,fuel=100,engineRpm=750,vehicleDamage=0,selectedPaint=0;
+const cabPaints=["#b92720","#245b91","#d5d7d5","#d1a52d"].map((v,i)=>mat("cabPaint"+i,v,0.25));
+function repaintTruck(){
+ selectedPaint=(selectedPaint+1)%cabPaints.length;
+ for(const n of ["cabMain","cabRoof","roofVisor","roofFairingFront"]){
+  const mesh=truck.getChildMeshes(false).find(x=>x.name===n);if(mesh)mesh.material=cabPaints[selectedPaint];
+ }
+ showToast("TRUCK PAINT UPDATED");
+}
+let distanceBonus=0,systemsRefreshAt=0;
+const panel=document.createElement("div");panel.id="haulPanel";
+panel.innerHTML='<div class="panelHead">EURO HAUL • DRIVER CENTRE</div><div class="panelGrid"><button id="viewToggle">COCKPIT VIEW</button><button id="weatherToggle">WEATHER: CLEAR</button><button id="gearToggle">GEAR: 1</button><button id="lampToggle">LIGHTS: OFF</button><button id="paintToggle">CHANGE PAINT</button><button id="serviceToggle">SERVICE €250</button><button id="fuelToggle">REFUEL €100</button><button id="closePanel">CLOSE</button></div><div id="systemReadout"></div>';
+document.body.appendChild(panel);
+const openPanel=document.createElement("button");openPanel.id="panelOpen";openPanel.textContent="GARAGE / OPTIONS";document.body.appendChild(openPanel);
+const readout=document.getElementById("systemReadout");
+function refreshSystems(){
+ readout.textContent="ENGINE "+Math.round(engineRpm)+" RPM • FUEL "+Math.round(fuel)+"% • DAMAGE "+Math.round(vehicleDamage)+"% • GEAR "+gear;
+ document.getElementById("gearToggle").textContent="GEAR: "+gear;
+ document.getElementById("lampToggle").textContent="LIGHTS: "+(headlightsOn?"ON":"OFF");
+ document.getElementById("weatherToggle").textContent="WEATHER: "+weatherMode.toUpperCase();
+}
+openPanel.addEventListener("click",()=>{panel.style.display="block";refreshSystems();});
+document.getElementById("closePanel").addEventListener("click",()=>panel.style.display="none");
+document.getElementById("viewToggle").addEventListener("click",()=>{
+ cockpitMode=!cockpitMode;scene.activeCamera=cockpitMode?cockpitCamera:camera;
+ document.getElementById("viewToggle").textContent=cockpitMode?"CHASE VIEW":"COCKPIT VIEW";
+});
+document.getElementById("weatherToggle").addEventListener("click",()=>{
+ const modes=["clear","rain","snow","fog"];setWeather(modes[(modes.indexOf(weatherMode)+1)%modes.length]);refreshSystems();
+});
+document.getElementById("gearToggle").addEventListener("click",()=>{gear=gear>=6?1:gear+1;refreshSystems();});
+document.getElementById("lampToggle").addEventListener("click",()=>{
+ headlightsOn=!headlightsOn;
+ truck.getChildMeshes(false).filter(m=>["headlamp","headlampUpperLED","headlampLowerLED"].includes(m.name)).forEach(m=>m.material=headlightsOn?lamp:black);
+ refreshSystems();
+});
+document.getElementById("paintToggle").addEventListener("click",repaintTruck);
+document.getElementById("serviceToggle").addEventListener("click",()=>{
+ if(career.cash<250){showToast("NOT ENOUGH MONEY");return;}
+ career.cash-=250;vehicleDamage=0;saveCareer();refreshSystems();showToast("TRUCK SERVICED");
+});
+document.getElementById("fuelToggle").addEventListener("click",()=>{
+ if(career.cash<100){showToast("NOT ENOUGH MONEY");return;}
+ career.cash-=100;fuel=Math.min(100,fuel+35);saveCareer();refreshSystems();showToast("FUEL ADDED");
+});
+const panelStyle=document.createElement("style");
+panelStyle.textContent=`
+#haulPanel{display:none;position:absolute;z-index:20;left:50%;top:50%;transform:translate(-50%,-50%);width:min(92vw,390px);padding:15px;border:1px solid #ffffff55;border-radius:16px;background:#08131df2;color:white;box-shadow:0 12px 36px #000b;font:12px Arial,sans-serif}
+.panelHead{font-weight:900;letter-spacing:1.4px;margin-bottom:12px;color:#f1d27a}
+.panelGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#haulPanel button{min-height:42px;padding:7px 5px;font-size:10px;border-radius:9px}
+#systemReadout{margin-top:12px;color:#c6d7df;font-size:10px;line-height:1.5}
+#panelOpen{position:absolute;z-index:8;top:62px;right:12px;padding:9px 11px;font-size:9px;border-radius:9px;background:#101820dd}
+`;
+document.head.appendChild(panelStyle);
+function updateVehicleSystems(dt){
+ if(input.gas&&fuel>0&&vehicleDamage<95){
+  const maxSpeed=[5,8,11,14,17,19][gear-1];speed=Math.min(speed,maxSpeed);
+  fuel=Math.max(0,fuel-dt*(0.018+speed*0.0015));
+ }
+ engineRpm=750+speed*145+(input.gas?650:0);
+ if(fuel<=0)speed=Math.max(0,speed-dt*2.8);
+ if(vehicleDamage>0)speed=Math.min(speed,Math.max(4,19-vehicleDamage*0.13));
+ if(odometer-distanceBonus>=50000){distanceBonus+=50000;career.cash+=1200;saveCareer();showToast("LONG-HAUL BONUS +€1,200");}
+ const now=performance.now();if(now-systemsRefreshAt>900){systemsRefreshAt=now;refreshSystems();}
+}
+scene.onBeforeRenderObservable.add(()=>{
+ const dt=Math.min(engine.getDeltaTime()/1000,0.05);updateWorld(dt);updateVehicleSystems(dt);
+});
+
 engine.runRenderLoop(()=>scene.render());
 window.addEventListener("resize",()=>engine.resize());
 if(loading)loading.style.display="none";
