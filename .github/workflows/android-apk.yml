@@ -53,6 +53,13 @@ jobs:
           ASSET_BYTES=$(du -sb Euro_Haul_Step1/public/assets/kenney | cut -f1)
           echo "Downloaded $MODEL_COUNT CC0 GLB models ($ASSET_BYTES bytes)"
           test "$MODEL_COUNT" -ge 400
+          mkdir -p Euro_Haul_Step1/public/assets/longhaul
+          curl -fsSL https://cdn.3dassets.dev/assets/13943/v1/model.glb -o Euro_Haul_Step1/public/assets/longhaul/long-nose-sleeper.glb
+          curl -fsSL https://cdn.3dassets.dev/assets/13946/v1/model.glb -o Euro_Haul_Step1/public/assets/longhaul/cabover-sleeper.glb
+          curl -fsSL 'https://cdn.3dassets.dev/assets/13950/v1/model.glb' -o Euro_Haul_Step1/public/assets/longhaul/dry-van-trailer.glb
+          curl -fsSL https://cdn.3dassets.dev/assets/14029/v1/model.glb -o Euro_Haul_Step1/public/assets/longhaul/truck-stop-yard.glb
+          curl -fsSL https://creativecommons.org/publicdomain/zero/1.0/legalcode.txt -o Euro_Haul_Step1/public/assets/longhaul/CC0-LICENSE.txt
+          echo "Added CC0 tractor, trailer and truck-stop scene models"
       - name: Apply upgraded game files
         run: |
           cp overrides/src/main.js Euro_Haul_Step1/src/main.js
@@ -94,6 +101,10 @@ jobs:
           echo "## Packaged game content" >> "$GITHUB_STEP_SUMMARY"
           echo "- Kenney CC0 GLB models packaged: $MODEL_COUNT" >> "$GITHUB_STEP_SUMMARY"
           echo "- Uncompressed GLB payload: $ASSET_MB MB ($ASSET_BYTES bytes)" >> "$GITHUB_STEP_SUMMARY"
+          TRUCK_MODEL_COUNT=$(unzip -l "$APK" | awk '$4 ~ /longhaul\/.*\.glb$/ {count++} END {print count+0}')
+          TRUCK_MODEL_BYTES=$(unzip -l "$APK" | awk '$4 ~ /longhaul\/.*\.glb$/ {sum+=$1} END {print sum+0}')
+          TRUCK_MODEL_MB=$(awk "BEGIN {printf \"%.2f\", $TRUCK_MODEL_BYTES/1048576}")
+          echo "- Additional long-haul tractor/trailer/yard GLBs: $TRUCK_MODEL_COUNT ($TRUCK_MODEL_MB MB)" >> "$GITHUB_STEP_SUMMARY"
           echo "- Actual APK file: $APK_MB MB ($APK_BYTES bytes)" >> "$GITHUB_STEP_SUMMARY"
           if [ "$MODEL_COUNT" -lt 400 ]; then
             echo "Expected 400+ GLB files inside APK; found $MODEL_COUNT" >&2
