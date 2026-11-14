@@ -37,4 +37,6 @@ The game now downloads and packages four pinned Kenney CC0 GLB collections durin
 
 The build pins the converted model library to commit 3ddcc695adbba9fb918cf31b7c139b3f95b76910 from https://github.com/Hidencod/tge-assets and includes that repository's CC0 LICENSE file in the app's asset directory. The GLB loader imports selected vehicles, buildings, roadside props and modular road pieces into the live scene. CI checks that at least 400 GLB models are packaged and reports their uncompressed payload size alongside the actual APK file size.
 
+A separate truck-specific CC0 collection is also integrated from https://3dassets.dev/packs/long-haul-trucking-and-truck-stop. The build includes a long-nose tractor, cab-over sleeper tractor, dry-van semitrailer and truck-stop yard scene (model IDs 13943, 13946, 13950 and 14029). The pack page declares CC0 1.0 Universal and documents metre-scale model dimensions. These models are loaded as traffic and roadside truck-stop content.
+
 The player truck is still a procedural model rather than a licensed, high-detail tractor unit. The current physics implementation is a simplified real-time vehicle dynamics model; it is not yet a validated professional-grade simulator. A physical Android gameplay test remains necessary.
