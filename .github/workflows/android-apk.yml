@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   build:
-    name: Build Euro Haul Android APK
+    name: Build Euro Haul
     runs-on: ubuntu-latest
 
     steps:
@@ -34,39 +34,37 @@ jobs:
           log-accepted-android-sdk-licenses: false
           packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
 
-      - name: Check project ZIP
-        run: |
-          test -f Euro_Haul_Step1_Godot_Free.zip
-          echo "Project ZIP found"
-
-      - name: Extract Euro Haul project
+      - name: Extract project
         run: |
           unzip -o Euro_Haul_Step1_Godot_Free.zip -d .
-          test -f package.json
-          test -f capacitor.config.json
-          echo "Project files found"
+          test -f Euro_Haul_Step1/package.json
 
       - name: Install dependencies
+        working-directory: Euro_Haul_Step1
         run: npm install
 
       - name: Build Babylon.js game
+        working-directory: Euro_Haul_Step1
         run: npm run build
 
       - name: Add Android platform
+        working-directory: Euro_Haul_Step1
         run: npx cap add android
 
       - name: Sync Android project
+        working-directory: Euro_Haul_Step1
         run: npx cap sync android
 
-      - name: Build Android APK
+      - name: Build APK
+        working-directory: Euro_Haul_Step1/android
         run: |
-          cd android
           chmod +x gradlew
           ./gradlew --no-daemon assembleDebug
 
-      - name: Upload Euro Haul APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Euro-Haul-Android-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: Euro_Haul_Step1/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+          
