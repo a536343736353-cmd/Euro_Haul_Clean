@@ -770,6 +770,72 @@ worldReady.then(()=>{
 });
 engine.runRenderLoop(()=>scene.render());
 
+// STAGE 03 — full 3D service garage environment, built as Babylon scene geometry.
+// The garage is a real scene space around the live tractor, not a flat background image.
+const ehGarageRoot=new BABYLON.TransformNode("EuroHaul3DServiceGarage",scene);
+ehGarageRoot.setEnabled(false);
+const ehGarageFloor=mat("ehGarageFloor","#4b5357",0.12,0.82);
+const ehGarageWall=mat("ehGarageWall","#27343b",0.05,0.9);
+const ehGarageStripe=mat("ehGarageSafetyYellow","#f0bb32",0.12,0.62);
+const ehGarageSteel=mat("ehGarageSteel","#8b999f",0.72,0.34);
+const ehGarageLight=mat("ehGarageLight","#fff1c7",0.08,0.24);
+const ehGarageGlass=mat("ehGarageWindow","#315b68",0.12,0.2,0.78);
+function ehGarageBox(name,w,h,d,x,y,z,material){
+  const mesh=box(ehGarageRoot,name,w,h,d,x,y,z,material);
+  mesh.isPickable=false;
+  return mesh;
+}
+ehGarageBox("GarageFloor",42,0.35,48,0,-0.22,0,ehGarageFloor);
+ehGarageBox("GarageBackWall",42,9,0.5,0,4.25,-20,ehGarageWall);
+ehGarageBox("GarageLeftWall",0.5,9,40,-21,4.25,0,ehGarageWall);
+ehGarageBox("GarageRightWall",0.5,9,40,21,4.25,0,ehGarageWall);
+ehGarageBox("GarageCeilingBeam",42,0.5,1,0,8.7,-9,ehGarageSteel);
+ehGarageBox("GarageRearHeader",42,0.6,0.8,0,8.2,-19.5,ehGarageSteel);
+// Inspection bay markings and wheel alignment strips.
+for(const x of [-4.8,4.8]){
+  ehGarageBox("ServiceBayYellowLine",0.16,0.025,34,x,0.0,0,ehGarageStripe);
+  ehGarageBox("ServiceBayWheelGuide",0.22,0.08,18,x*0.72,0.08,-1,ehGarageSteel);
+}
+ehGarageBox("InspectionPitDark",2.1,0.06,12,0,-0.015,-1,black);
+for(let z=-7;z<=5;z+=2){
+  ehGarageBox("PitSafetyRung",2.25,0.035,0.08,0,0.025,z,ehGarageStripe);
+}
+// Tool benches, cabinets, lifts and a diagnostic station.
+for(const side of [-1,1]){
+  ehGarageBox("WorkshopToolCabinet",2.8,2.4,1.1,side*16,1.2,-12,ehGarageSteel);
+  ehGarageBox("WorkshopCabinetDoor",2.5,1.75,0.06,side*16,1.25,-11.42,black);
+  ehGarageBox("WorkshopBench",5.5,0.22,1.4,side*14,1.05,3,ehGarageSteel);
+  for(let x=-2;x<=2;x+=2)ehGarageBox("WorkshopBenchLeg",0.16,1.0,0.16,side*14+x,0.5,3,black);
+  ehGarageBox("HydraulicLiftPost",0.36,4.1,0.36,side*6.8,2.05,-2,ehGarageStripe);
+  ehGarageBox("HydraulicLiftArm",0.22,0.18,2.2,side*5.8,1.0,-2,ehGarageSteel);
+  ehGarageBox("HighGarageWindow",0.12,1.7,5.5,side*20.7,6.1,8,ehGarageGlass);
+}
+// Roof-mounted light panels illuminate the truck with real scene lights.
+for(const z of [-13,-4,5,14]){
+  ehGarageBox("GarageCeilingLight",7.5,0.12,1.1,0,8.35,z,ehGarageLight);
+  const point=new BABYLON.PointLight("GarageBayLight",new BABYLON.Vector3(0,7.9,z),scene);
+  point.parent=ehGarageRoot;point.intensity=0.42;point.range=18;
+}
+// 3D signage and a branded service-bay marker.
+ehGarageBox("EuroHaulGarageSign",10,2.2,0.18,0,6.3,-19.55,redDark);
+ehGarageBox("EuroHaulGarageSignInset",9.4,1.65,0.04,0,6.3,-19.42,black);
+const ehGarageSignTexture=new BABYLON.DynamicTexture("EuroHaulGarageSignTexture",{width:1024,height:256},scene,false);
+ehGarageSignTexture.drawText("EURO HAUL  •  SERVICE & CUSTOMISATION",24,154,"bold 48px Arial","#f4d27b","transparent",true);
+const ehGarageSignMaterial=new BABYLON.StandardMaterial("EuroHaulGarageSignMaterial",scene);
+ehGarageSignMaterial.diffuseTexture=ehGarageSignTexture;ehGarageSignMaterial.emissiveColor=new BABYLON.Color3(0.65,0.52,0.24);
+const ehGarageSignFace=ehGarageBox("EuroHaulGarageSignFace",9.2,1.45,0.025,0,6.3,-19.38,ehGarageSignMaterial);
+ehGarageSignFace.isPickable=false;
+const ehGarageBaseShowMenuPage=showMenuPage;
+showMenuPage=function(page){
+  ehGarageRoot.setEnabled(page==="garage");
+  ehGarageBaseShowMenuPage(page);
+};
+const ehGarageClosePanel=document.getElementById("closePanel");
+if(ehGarageClosePanel){
+  ehGarageClosePanel.addEventListener("click",()=>ehGarageRoot.setEnabled(false));
+}
+
+
 window.addEventListener("resize",()=>engine.resize());
 if(loading)loading.style.display="none";
 
