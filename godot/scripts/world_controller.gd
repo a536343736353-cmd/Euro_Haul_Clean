@@ -1,7 +1,11 @@
 extends Node3D
 
+@onready var truck: CharacterBody3D = $Truck
+
 func _ready() -> void:
 	_create_default_input_actions()
+	if truck:
+		truck.add_to_group("player_truck")
 
 func _create_default_input_actions() -> void:
 	_add_key_action("accelerate", KEY_W)
