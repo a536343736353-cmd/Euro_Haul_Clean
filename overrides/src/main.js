@@ -577,7 +577,7 @@ scene.onBeforeRenderObservable.add(()=>{
 const kenneyTemplates=new Map();
 async function loadKenneyTemplate(pack,file){
  const key=pack+"/"+file;if(kenneyTemplates.has(key))return kenneyTemplates.get(key);
- const assetRoot=pack==="longhaul"?"/assets/longhaul/":"/assets/kenney/"+pack+"/";
+ const assetRoot=pack==="longhaul"?"/assets/longhaul/":pack==="carpark"?"/assets/carpark/":pack==="motorway"?"/assets/motorway/":"/assets/kenney/"+pack+"/";
  const promise=BABYLON.SceneLoader.ImportMeshAsync("",assetRoot,file,scene).then(result=>{
   const root=(result.rootNodes&&result.rootNodes[0])||(result.transformNodes&&result.transformNodes[0])||(result.meshes&&result.meshes[0]);
   if(!root)throw new Error("Missing model root "+key);root.setEnabled(false);return root;
@@ -597,8 +597,25 @@ async function addLongHaulTraffic(file,x,z,direction,cruise,scale=1){
  const root=await placeKenneyModel("longhaul",file,x,0,z,scale,direction<0?Math.PI:0);
  if(root)trafficUnits.push({root,direction,cruise,halfWidth:1.35,kind:"semi-truck"});
 }
+async function loadCarParkTraffic(){
+ try{
+  const response=await fetch("/assets/carpark/manifest.json");if(!response.ok)throw new Error("fleet manifest HTTP "+response.status);
+  const manifest=await response.json();
+  const vehicles=(manifest.assets||[]).filter(a=>a.slug&&(a.category?.slug==="vehicles"||/truck|van|car|suv|pickup|saloon/i.test(a.title||"")));
+  const chosen=vehicles.slice(0,12);
+  const jobs=chosen.map(async(a,i)=>{
+   const direction=i%2===0?-1:1,lane=direction<0?-3.05:3.05;
+   const root=await placeKenneyModel("carpark",a.slug+".glb",lane,0,truck.position.z+410+i*22,1,direction<0?Math.PI:0);
+   if(root)trafficUnits.push({root,direction,cruise:10+(i%4)*1.3,halfWidth:1.2,kind:"city-fleet"});
+  });
+  await Promise.all(jobs);console.info("Imported city traffic models:",chosen.length);
+ }catch(error){console.warn("City fleet manifest unavailable",error);}
+}
 async function loadKenneyWorld(){
  const jobs=[
+  loadCarParkTraffic(),
+  placeKenneyModel("carpark","starter-scene.glb",-22,0,truck.position.z+500,0.42,0),
+  placeKenneyModel("motorway","starter-scene.glb",22,0,truck.position.z+510,0.5,0),
   addKenneyTraffic("sedan.glb",-3.05,truck.position.z+125,-1,13),  addLongHaulTraffic("cabover-sleeper.glb",-3.05,truck.position.z+305,-1,10,1.0),
   addLongHaulTraffic("long-nose-sleeper.glb",3.05,truck.position.z+355,1,11,1.0),
   placeKenneyModel("longhaul","dry-van-trailer.glb",19,0,430,0.8,Math.PI/2),
