@@ -302,6 +302,64 @@ bindButton("left","left"); bindButton("right","right");
 bindButton("accelerate","gas"); bindButton("brake","brake");
 let speed=0,steerValue=0,odometer=0;
 
+
+// STEP 03/10 — moving highway traffic with reusable low-poly cars and lorries.
+const trafficBlue=mat("trafficBlue","#315d87",0.18), trafficSilver=mat("trafficSilver","#aeb8bd",0.35);
+const trafficYellow=mat("trafficYellow","#d4a72c",0.12), trafficWindow=mat("trafficWindow","#294653",0.1,0.2,0.86);
+const trafficTyre=mat("trafficTyre","#151719"), trafficLamp=mat("trafficLamp","#fff0c8");
+const trafficUnits=[];
+function buildTrafficVehicle(index,kind,color,x,z,direction,cruise){
+  const root=new BABYLON.TransformNode("trafficVehicle_"+index,scene);
+  root.position.set(x,0,z);
+  const bodyMat=color;
+  const length=kind==="lorry"?5.4:3.7;
+  const width=kind==="lorry"?2.25:1.82;
+  box(root,"trafficChassis",width,0.42,length,0,0.72,0,black);
+  box(root,"trafficBody",width,kind==="lorry"?2.25:0.9,length*0.72,0,kind==="lorry"?2.0:1.25,0,bodyMat);
+  if(kind==="lorry"){
+    box(root,"trafficCab",width,1.65,1.45,0,2.0,length*0.29,trafficBlue);
+    box(root,"trafficCabGlass",width*0.78,0.65,0.05,0,2.25,length*0.29+0.75,trafficWindow);
+  }else{
+    box(root,"trafficWindshield",width*0.76,0.48,0.05,0,1.55,length*0.18,trafficWindow);
+    box(root,"trafficRearGlass",width*0.72,0.4,0.05,0,1.52,-length*0.3,trafficWindow);
+  }
+  for(const side of [-1,1]){
+    for(const wz of (kind==="lorry"?[-2.0,-0.8,1.65]:[-1.15,1.15])){
+      const tire=cyl(root,"trafficWheel",kind==="lorry"?0.82:0.68,0.24,side*(width/2),0.48,wz,trafficTyre);
+      tire.rotation.x=Math.PI/2;
+    }
+    box(root,"trafficHeadlamp",0.28,0.16,0.06,side*width*0.34,1.0,length*0.37,trafficLamp);
+    box(root,"trafficTailLamp",0.22,0.22,0.06,side*width*0.36,0.98,-length*0.37,tail);
+  }
+  trafficUnits.push({root,direction,cruise,halfWidth:width/2,kind});
+}
+const trafficColors=[trafficBlue,trafficSilver,trafficYellow,red,white];
+for(let i=0;i<10;i++){
+  const oncoming=i%2===0;
+  const lane=oncoming?-3.05:3.05;
+  const z=truck.position.z+55+i*34;
+  const kind=i===5||i===9?"lorry":"car";
+  buildTrafficVehicle(i,kind,trafficColors[i%trafficColors.length],lane,z,oncoming?-1:1,oncoming?10+(i%3)*1.5:12+(i%3)*1.2);
+}
+let lastTrafficNotice=0;
+function updateTraffic(dt,now){
+  for(const unit of trafficUnits){
+    unit.root.position.z+=unit.direction*unit.cruise*dt;
+    const relative=unit.root.position.z-truck.position.z;
+    if(relative>210)unit.root.position.z=truck.position.z-190-(Math.random()*35);
+    if(relative< -210)unit.root.position.z=truck.position.z+190+(Math.random()*35);
+    const lateral=Math.abs(unit.root.position.x-truck.position.x);
+    const longitudinal=Math.abs(relative);
+    if(lateral<2.05&&longitudinal<4.1&&speed>1.5){
+      speed=Math.max(0,speed-12*dt);
+      if(now-lastTrafficNotice>2200){
+        showToast("TRAFFIC CONTACT • SLOW DOWN");
+        lastTrafficNotice=now;
+      }
+    }
+  }
+}
+
 // STEP 02/10 — delivery missions, live dashboard and persistent earnings.
 const saveKey="euroHaulCareerV1";
 let career={cash:0,deliveries:0};
@@ -386,6 +444,7 @@ scene.onBeforeRenderObservable.add(()=>{
    showToast("DELIVERY COMPLETE  +€750");
  }
  updateCareerHud(performance.now());
+ updateTraffic(dt,performance.now());
 });
 engine.runRenderLoop(()=>scene.render());
 window.addEventListener("resize",()=>engine.resize());
