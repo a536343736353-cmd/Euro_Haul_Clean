@@ -1,4 +1,5 @@
 import * as BABYLON from "babylonjs";
+import "babylonjs-loaders";
 
 const canvas = document.getElementById("renderCanvas");
 const loading = document.getElementById("loading");
@@ -301,6 +302,8 @@ function bindButton(id,key){
 bindButton("left","left"); bindButton("right","right");
 bindButton("accelerate","gas"); bindButton("brake","brake");
 let speed=0,steerValue=0,odometer=0;
+const truckPhysics={mass:28000,wheelRadius:0.52,wheelbase:5.8,finalDrive:1.9,gearRatios:[12.0,8.0,5.5,3.8,2.7,2.05],peakTorque:2050,maxRpm:2300,idleRpm:650,brakeForce:185000,rollingCoefficient:0.006,dragArea:7.2,airDensity:1.225,tyreGrip:0.72};
+let engineLoad=0,trailerArticulation=0,offRoadTime=0;
 
 
 // STEP 03/10 — moving highway traffic with reusable low-poly cars and lorries.
@@ -426,25 +429,42 @@ function updateCareerHud(now){
 }
 scene.onBeforeRenderObservable.add(()=>{
  const dt=Math.min(engine.getDeltaTime()/1000,0.05);
- if(input.gas)speed=Math.min(speed+4.6*dt,19);
- else speed=Math.max(speed-0.85*dt,0);
- if(input.brake)speed=Math.max(speed-10*dt,0);
- const steerTarget=input.left?-0.5:input.right?0.5:0;
- steerValue+=(steerTarget-steerValue)*Math.min(5*dt,1);
- truck.rotation.y+=steerValue*speed*0.014*dt;
+ const gearIndex=Math.max(0,Math.min(5,(gear||1)-1));
+ const ratio=truckPhysics.gearRatios[gearIndex];
+ const wheelRpm=Math.abs(speed)/truckPhysics.wheelRadius*60/(Math.PI*2);
+ const estimatedRpm=BABYLON.Scalar.Clamp(wheelRpm*ratio*truckPhysics.finalDrive,truckPhysics.idleRpm,truckPhysics.maxRpm);
+ const rpmBand=BABYLON.Scalar.Clamp(1-Math.abs(estimatedRpm-1550)/1050,0.22,1);
+ const damageFactor=1-BABYLON.Scalar.Clamp((vehicleDamage||0)/150,0,0.72);
+ const throttle=input.gas&&fuel>0?1:0;
+ const driveForce=throttle*truckPhysics.peakTorque*rpmBand*ratio*truckPhysics.finalDrive*0.9/truckPhysics.wheelRadius*damageFactor;
+ const dragForce=0.5*truckPhysics.airDensity*truckPhysics.dragArea*speed*Math.abs(speed);
+ const rollingForce=truckPhysics.mass*9.81*truckPhysics.rollingCoefficient*(speed>0?1:speed<0?-1:0);
+ const engineBrake=throttle?0:(speed>0?truckPhysics.mass*(gearIndex===0?0.018:0.032):0);
+ const serviceBrake=input.brake?truckPhysics.brakeForce:0;
+ speed=Math.max(0,Math.min(32,speed+(driveForce-dragForce-rollingForce-engineBrake-serviceBrake)/truckPhysics.mass*dt));
+ const steerTarget=input.left?-1:input.right?1:0;
+ steerValue+=(steerTarget-steerValue)*Math.min(4.8*dt,1);
+ let yawRate=(speed/truckPhysics.wheelbase)*Math.tan(steerValue*0.48);
+ const lateralAcceleration=Math.abs(speed*yawRate);
+ if(lateralAcceleration>truckPhysics.tyreGrip*9.81)yawRate*=truckPhysics.tyreGrip*9.81/lateralAcceleration;
+ truck.rotation.y+=yawRate*dt;
  truck.position.x+=Math.sin(truck.rotation.y)*speed*dt;
  truck.position.z+=Math.cos(truck.rotation.y)*speed*dt;
- truck.position.x=BABYLON.Scalar.Clamp(truck.position.x,-4.2,4.2);
- wheels.forEach(w=>w.rotation.x+=speed*dt*2.1);
+ if(Math.abs(truck.position.x)>5.1){
+  offRoadTime+=dt;speed=Math.max(0,speed-2.8*dt);
+  if(offRoadTime>1.2&&Math.random()<dt*0.8){vehicleDamage=Math.min(100,vehicleDamage+0.35);if(performance.now()-lastTrafficNotice>2400){showToast("OFF-ROAD DAMAGE • RETURN TO THE HIGHWAY");lastTrafficNotice=performance.now();}}
+ }else offRoadTime=0;
+ truck.position.x=BABYLON.Scalar.Clamp(truck.position.x,-5.7,5.7);
+ truck.rotation.z=-steerValue*Math.min(speed/32,1)*0.035;
+ trailerArticulation+=(BABYLON.Scalar.Clamp(-yawRate*0.62,-0.32,0.32)-trailerArticulation)*Math.min(dt*1.6,1);
+ trailer.rotation.y=trailerArticulation;
+ wheels.forEach(w=>w.rotation.x+=speed*dt/truckPhysics.wheelRadius);
  odometer+=speed*dt;
  const remaining=destinationZ-truck.position.z;
  if(remaining<=5&&remaining>=-5&&speed<2.8){
-   career.deliveries+=1;career.cash+=750;saveCareer();
-   destinationZ+=260;destination.position.z=destinationZ;
-   showToast("DELIVERY COMPLETE  +€750");
+  career.deliveries+=1;career.cash+=750;saveCareer();destinationZ+=260;destination.position.z=destinationZ;showToast("DELIVERY COMPLETE  +€750");
  }
- updateCareerHud(performance.now());
- updateTraffic(dt,performance.now());
+ updateCareerHud(performance.now());updateTraffic(dt,performance.now());
 });
 
 /* STAGES 04–10: weather, cockpit, vehicle systems, depot world, garage and career. */
@@ -540,19 +560,58 @@ panelStyle.textContent=`
 `;
 document.head.appendChild(panelStyle);
 function updateVehicleSystems(dt){
- if(input.gas&&fuel>0&&vehicleDamage<95){
-  const maxSpeed=[5,8,11,14,17,19][gear-1];speed=Math.min(speed,maxSpeed);
-  fuel=Math.max(0,fuel-dt*(0.018+speed*0.0015));
- }
- engineRpm=750+speed*145+(input.gas?650:0);
- if(fuel<=0)speed=Math.max(0,speed-dt*2.8);
- if(vehicleDamage>0)speed=Math.min(speed,Math.max(4,19-vehicleDamage*0.13));
+ const ratio=truckPhysics.gearRatios[Math.max(0,Math.min(5,(gear||1)-1))];
+ const wheelRpm=Math.abs(speed)/truckPhysics.wheelRadius*60/(Math.PI*2);
+ engineRpm=BABYLON.Scalar.Clamp(wheelRpm*ratio*truckPhysics.finalDrive+(input.gas?120:0),truckPhysics.idleRpm,truckPhysics.maxRpm);
+ engineLoad=input.gas&&fuel>0?Math.min(1,0.35+speed/38):0.08;
+ if(input.gas&&fuel>0)fuel=Math.max(0,fuel-dt*(0.012+speed*0.0018+engineLoad*0.014));
  if(odometer-distanceBonus>=50000){distanceBonus+=50000;career.cash+=1200;saveCareer();showToast("LONG-HAUL BONUS +€1,200");}
  const now=performance.now();if(now-systemsRefreshAt>900){systemsRefreshAt=now;refreshSystems();}
 }
 scene.onBeforeRenderObservable.add(()=>{
  const dt=Math.min(engine.getDeltaTime()/1000,0.05);updateWorld(dt);updateVehicleSystems(dt);
 });
+
+
+// Kenney CC0 GLB library: pinned asset models are downloaded into the app by CI.
+const kenneyTemplates=new Map();
+async function loadKenneyTemplate(pack,file){
+ const key=pack+"/"+file;if(kenneyTemplates.has(key))return kenneyTemplates.get(key);
+ const promise=BABYLON.SceneLoader.ImportMeshAsync("","/assets/kenney/"+pack+"/",file,scene).then(result=>{
+  const root=(result.rootNodes&&result.rootNodes[0])||(result.transformNodes&&result.transformNodes[0])||(result.meshes&&result.meshes[0]);
+  if(!root)throw new Error("Missing model root "+key);root.setEnabled(false);return root;
+ }).catch(error=>{console.warn("Kenney model load failed",key,error);return null;});
+ kenneyTemplates.set(key,promise);return promise;
+}
+async function placeKenneyModel(pack,file,x,y,z,scale=1,rotation=0){
+ const template=await loadKenneyTemplate(pack,file);if(!template)return null;
+ const clone=template.clone("kenney_"+pack+"_"+file+"_"+Math.round(x)+"_"+Math.round(z),null,true);if(!clone)return null;
+ clone.setEnabled(true);clone.position.set(x,y,z);clone.rotation.y=rotation;clone.scaling.scaleInPlace(scale);return clone;
+}
+async function addKenneyTraffic(file,x,z,direction,cruise,scale=1.5){
+ const root=await placeKenneyModel("car-kit",file,x,0,z,scale,direction<0?Math.PI:0);
+ if(root)trafficUnits.push({root,direction,cruise,halfWidth:1.1,kind:"licensed-model"});
+}
+async function loadKenneyWorld(){
+ const jobs=[
+  addKenneyTraffic("sedan.glb",-3.05,truck.position.z+125,-1,13),
+  addKenneyTraffic("suv.glb",3.05,truck.position.z+165,1,11),
+  addKenneyTraffic("delivery.glb",-3.05,truck.position.z+215,-1,12,1.4),
+  addKenneyTraffic("truck-flat.glb",3.05,truck.position.z+255,1,10,1.5)
+ ];
+ const buildings=["building-a.glb","building-c.glb","building-f.glb","building-j.glb","building-m.glb"];
+ for(let i=0;i<buildings.length;i++){
+  const z=75+i*115;jobs.push(placeKenneyModel("city-kit-commercial",buildings[i],-27,0,z,2.5,Math.PI));
+  jobs.push(placeKenneyModel("city-kit-commercial",buildings[(i+2)%buildings.length],27,0,z+38,2.3,0));
+ }
+ const nature=["plant-bush.glb","plant-bushlarge.glb","rock-largea.glb","rock-largec.glb","grass-large.glb"];
+ for(let i=0;i<24;i++){const side=i%2===0?-1:1;jobs.push(placeKenneyModel("nature-kit",nature[i%nature.length],side*(12+(i%4)*2),0,25+i*23,1.25+(i%3)*0.3,Math.random()*Math.PI*2));}
+ jobs.push(placeKenneyModel("city-kit-roads","road-bridge.glb",0,0,390,1,0));
+ jobs.push(placeKenneyModel("city-kit-roads","light-square.glb",-9,0,145,1.1,0));
+ jobs.push(placeKenneyModel("city-kit-roads","construction-barrier.glb",8,0,285,1.1,0));
+ await Promise.all(jobs);console.info("Kenney CC0 assets loaded:",jobs.length);
+}
+loadKenneyWorld();
 
 engine.runRenderLoop(()=>scene.render());
 window.addEventListener("resize",()=>engine.resize());
