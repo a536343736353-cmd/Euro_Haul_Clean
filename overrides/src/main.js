@@ -458,7 +458,7 @@ scene.onBeforeRenderObservable.add(()=>{
  truck.position.x+=Math.sin(truck.rotation.y)*speed*dt;
  truck.position.z+=Math.cos(truck.rotation.y)*speed*dt;
  if(Math.abs(truck.position.x)>5.1){
-  offRoadTime+=dt;speed=Math.max(0,speed-2.8*dt);
+  offRoadTime+=dt;speed-=Math.sign(speed)*2.8*dt;
   if(offRoadTime>1.2&&Math.random()<dt*0.8){vehicleDamage=Math.min(100,vehicleDamage+0.35);if(performance.now()-lastTrafficNotice>2400){showToast("OFF-ROAD DAMAGE • RETURN TO THE HIGHWAY");lastTrafficNotice=performance.now();}}
  }else offRoadTime=0;
  truck.position.x=BABYLON.Scalar.Clamp(truck.position.x,-5.7,5.7);
@@ -603,8 +603,8 @@ function updateVehicleSystems(dt){
   else if(engineRpm<900&&gear>1)gear--;
  }
  engineRpm=BABYLON.Scalar.Clamp(wheelRpm*ratio*truckPhysics.finalDrive+(input.gas?120:0),truckPhysics.idleRpm,truckPhysics.maxRpm);
- engineLoad=input.gas&&fuel>0?Math.min(1,0.35+speed/38):0.08;
- if(input.gas&&fuel>0)fuel=Math.max(0,fuel-dt*(0.012+speed*0.0018+engineLoad*0.014));
+ engineLoad=input.gas&&fuel>0?Math.min(1,0.35+Math.abs(speed)/38):0.08;
+ if(input.gas&&fuel>0)fuel=Math.max(0,fuel-dt*(0.012+Math.abs(speed)*0.0018+engineLoad*0.014));
  if(odometer-distanceBonus>=50000){distanceBonus+=50000;career.cash+=1200;saveCareer();showToast("LONG-HAUL BONUS +€1,200");}
  const now=performance.now();if(now-systemsRefreshAt>900){systemsRefreshAt=now;refreshSystems();}
 }
