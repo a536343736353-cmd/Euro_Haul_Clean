@@ -60,6 +60,46 @@ jobs:
           curl -fsSL https://cdn.3dassets.dev/assets/14029/v1/model.glb -o Euro_Haul_Step1/public/assets/longhaul/truck-stop-yard.glb
           curl -fsSL https://creativecommons.org/publicdomain/zero/1.0/legalcode.txt -o Euro_Haul_Step1/public/assets/longhaul/CC0-LICENSE.txt
           echo "Added CC0 tractor, trailer and truck-stop scene models"
+          mkdir -p Euro_Haul_Step1/public/assets/carpark Euro_Haul_Step1/public/assets/motorway
+          curl -fsSL https://cdn.3dassets.dev/assets/32562/v1/model.glb -o Euro_Haul_Step1/public/assets/carpark/starter-scene.glb
+          curl -fsSL https://cdn.3dassets.dev/assets/35979/v1/model.glb -o Euro_Haul_Step1/public/assets/motorway/starter-scene.glb
+          python3 - <<'PY'
+          import concurrent.futures, json, pathlib, urllib.request, time
+          packs = [
+              ("car-park-and-road-vehicle-fleet", pathlib.Path("Euro_Haul_Step1/public/assets/carpark")),
+              ("motorway-services-and-truck-park", pathlib.Path("Euro_Haul_Step1/public/assets/motorway")),
+          ]
+          def fetch_one(item):
+              url, dest = item
+              for attempt in range(3):
+                  try:
+                      req = urllib.request.Request(url, headers={"User-Agent":"EuroHaul-CC0-AssetBuilder/1.0"})
+                      with urllib.request.urlopen(req, timeout=60) as response, open(dest, "wb") as out:
+                          out.write(response.read())
+                      if dest.stat().st_size == 0:
+                          raise RuntimeError("empty GLB")
+                      return dest.stat().st_size
+                  except Exception:
+                      if attempt == 2:
+                          raise
+                      time.sleep(2 * (attempt + 1))
+          for slug, folder in packs:
+              req = urllib.request.Request("https://3dassets.dev/api/v1/packs/" + slug, headers={"User-Agent":"EuroHaul-CC0-AssetBuilder/1.0"})
+              with urllib.request.urlopen(req, timeout=60) as response:
+                  manifest = json.load(response)
+              data = manifest.get("data", manifest)
+              assets = data.get("assets", [])
+              (folder / "manifest.json").write_text(json.dumps(data))
+              downloads = []
+              for asset in assets:
+                  if asset.get("cdnUrl") and asset.get("slug"):
+                      downloads.append((asset["cdnUrl"], folder / (asset["slug"] + ".glb")))
+              with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+                  sizes = list(pool.map(fetch_one, downloads))
+              print(f"{slug}: {len(sizes)} GLB models, {sum(sizes)} bytes")
+          PY
+          curl -fsSL https://creativecommons.org/publicdomain/zero/1.0/legalcode.txt -o Euro_Haul_Step1/public/assets/carpark/CC0-LICENSE.txt
+          cp Euro_Haul_Step1/public/assets/carpark/CC0-LICENSE.txt Euro_Haul_Step1/public/assets/motorway/CC0-LICENSE.txt
       - name: Apply upgraded game files
         run: |
           cp overrides/src/main.js Euro_Haul_Step1/src/main.js
@@ -109,7 +149,18 @@ jobs:
           TOTAL_ASSET_BYTES=$((ASSET_BYTES + TRUCK_MODEL_BYTES))
           TOTAL_ASSET_MB=$(awk "BEGIN {printf \"%.2f\", $TOTAL_ASSET_BYTES/1048576}")
           echo "- Total uncompressed 3D model payload: $TOTAL_ASSET_MB MB ($TOTAL_ASSET_BYTES bytes)" >> "$GITHUB_STEP_SUMMARY"
-          echo "MEASURED_APK=$APK_MB MiB ($APK_BYTES bytes); Kenney_models=$MODEL_COUNT; longhaul_models=$TRUCK_MODEL_COUNT; 3D_payload=$TOTAL_ASSET_MB MiB"
+          CARPARK_COUNT=$(unzip -l "$APK" | awk '$4 ~ /carpark\/.*\.glb$/ {count++} END {print count+0}')
+          MOTORWAY_COUNT=$(unzip -l "$APK" | awk '$4 ~ /motorway\/.*\.glb$/ {count++} END {print count+0}')
+          CARPARK_BYTES=$(unzip -l "$APK" | awk '$4 ~ /carpark\/.*\.glb$/ {sum+=$1} END {print sum+0}')
+          MOTORWAY_BYTES=$(unzip -l "$APK" | awk '$4 ~ /motorway\/.*\.glb$/ {sum+=$1} END {print sum+0}')
+          ALL_MODEL_COUNT=$((MODEL_COUNT + TRUCK_MODEL_COUNT + CARPARK_COUNT + MOTORWAY_COUNT))
+          ALL_ASSET_BYTES=$((TOTAL_ASSET_BYTES + CARPARK_BYTES + MOTORWAY_BYTES))
+          ALL_ASSET_MB=$(awk "BEGIN {printf \"%.2f\", $ALL_ASSET_BYTES/1048576}")
+          echo "- Car Park fleet GLBs: $CARPARK_COUNT" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Motorway service-area GLBs: $MOTORWAY_COUNT" >> "$GITHUB_STEP_SUMMARY"
+          echo "- All packaged GLB models: $ALL_MODEL_COUNT" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Total uncompressed GLB payload: $ALL_ASSET_MB MiB" >> "$GITHUB_STEP_SUMMARY"
+          echo "MEASURED_APK=$APK_MB MiB ($APK_BYTES bytes); total_GLBS=$ALL_MODEL_COUNT; 3D_payload=$ALL_ASSET_MB MiB"
           if [ "$MODEL_COUNT" -lt 400 ]; then
             echo "Expected 400+ GLB files inside APK; found $MODEL_COUNT" >&2
             exit 1
