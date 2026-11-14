@@ -489,7 +489,7 @@ scene.onBeforeRenderObservable.add(()=>{
  odometer+=Math.abs(speed)*dt;
  const remaining=destinationZ-truck.position.z;
  if(remaining<=5&&remaining>=-5&&speed<2.8){
-  career.deliveries+=1;career.cash+=750;saveCareer();destinationZ+=260;destination.position.z=destinationZ;showToast("DELIVERY COMPLETE  +€750");
+  career.deliveries+=1;career.cash+=activeContract.reward;career.xp+=500;saveCareer();destinationZ+=260;destination.position.z=destinationZ;showToast("DELIVERY COMPLETE  +€"+activeContract.reward);
  }
  updateCareerHud(performance.now());updateTraffic(dt,performance.now());
 });
@@ -813,5 +813,54 @@ showMenuPage=function(page){
     saveCareer();
     document.getElementById("ehProfileFeedback").textContent="PROFILE SAVED ON THIS DEVICE.";
     showToast("DRIVER PROFILE SAVED");
+  });
+};
+
+
+// STAGE 02 — selectable freight contracts with cargo mass, route length and payout.
+let activeContract={id:"parts",name:"Automotive spare parts",cargo:"Palletised parts",mass:8000,reward:650,distance:220};
+const freightContracts=[
+  {id:"parts",name:"Automotive spare parts",cargo:"Palletised parts",mass:8000,reward:650,distance:220},
+  {id:"food",name:"Refrigerated food",cargo:"Chilled groceries",mass:16000,reward:1200,distance:320},
+  {id:"plant",name:"Construction machinery",cargo:"Heavy equipment",mass:24000,reward:1850,distance:440}
+];
+const showMenuPageWithProfile=showMenuPage;
+showMenuPage=function(page){
+  if(page!=="jobs"){showMenuPageWithProfile(page);return;}
+  refreshMenuHome();
+  const cards=freightContracts.map(c=>
+    '<button class="eh-contract-card" data-contract="'+c.id+'">'+
+    '<strong>'+c.name+'</strong><span>'+c.cargo+'</span>'+
+    '<span>'+Math.round(c.mass/1000)+' t cargo • '+c.distance+' km route</span>'+
+    '<b>PAY €'+c.reward.toLocaleString()+'</b></button>'
+  ).join("");
+  menuDetail.innerHTML=
+    '<h2>FREIGHT CONTRACT BOARD</h2>'+
+    '<p>Choose a load. The selected cargo changes the truck gross mass, route distance and delivery payment.</p>'+
+    '<div class="eh-contract-list">'+cards+'</div>'+
+    '<div class="eh-menu-facts"><span>ACTIVE CONTRACT</span><b id="ehActiveContract">'+activeContract.name+'</b></div>'+
+    '<div class="eh-menu-facts"><span>GROSS VEHICLE MASS</span><b id="ehContractMass">'+Math.round((28000+activeContract.mass)/1000)+' t</b></div>'+
+    '<div class="eh-menu-facts"><span>DELIVERY REWARD</span><b id="ehContractReward">€'+activeContract.reward.toLocaleString()+'</b></div>'+
+    '<button id="ehAcceptContract" class="eh-action-button">ACCEPT CONTRACT & SET ROUTE</button>'+
+    '<p id="ehContractFeedback" class="eh-small-note" aria-live="polite">Select a freight contract to continue.</p>';
+  menuDetail.querySelectorAll("[data-contract]").forEach(button=>{
+    button.addEventListener("click",()=>{
+      const selected=freightContracts.find(c=>c.id===button.dataset.contract);
+      if(!selected)return;
+      activeContract=selected;
+      menuDetail.querySelectorAll(".eh-contract-card").forEach(card=>card.classList.toggle("selected",card===button));
+      document.getElementById("ehActiveContract").textContent=selected.name;
+      document.getElementById("ehContractMass").textContent=Math.round((28000+selected.mass)/1000)+" t";
+      document.getElementById("ehContractReward").textContent="€"+selected.reward.toLocaleString();
+      document.getElementById("ehContractFeedback").textContent="Selected: "+selected.cargo+". Accept to load the trailer and set the route.";
+    });
+  });
+  document.getElementById("ehAcceptContract").addEventListener("click",()=>{
+    cargoLoadKg=activeContract.mass;
+    truckPhysics.mass=28000+cargoLoadKg;
+    destinationZ=truck.position.z+activeContract.distance;
+    destination.position.z=destinationZ;
+    document.getElementById("ehContractFeedback").textContent="CONTRACT ACCEPTED • "+activeContract.cargo.toUpperCase()+" LOADED.";
+    showToast("CONTRACT ACCEPTED • "+activeContract.name.toUpperCase());
   });
 };
