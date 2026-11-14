@@ -1,7 +1,12 @@
-
 name: Build Euro Haul Android APK
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'overrides/**'
+      - '.github/workflows/android-apk.yml'
+      - 'Euro_Haul_Step1_Godot_Free.zip'
   workflow_dispatch:
 
 permissions:
@@ -11,60 +16,52 @@ jobs:
   build:
     name: Build Euro Haul
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
           accept-android-sdk-licenses: true
           log-accepted-android-sdk-licenses: false
           packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
-
       - name: Extract project
         run: |
           unzip -o Euro_Haul_Step1_Godot_Free.zip -d .
           test -f Euro_Haul_Step1/package.json
-
+      - name: Apply upgraded game files
+        run: |
+          cp overrides/src/main.js Euro_Haul_Step1/src/main.js
+          cp overrides/src/style.css Euro_Haul_Step1/src/style.css
       - name: Install dependencies
         working-directory: Euro_Haul_Step1
         run: npm install
-
       - name: Build Babylon.js game
         working-directory: Euro_Haul_Step1
         run: npm run build
-
       - name: Add Android platform
         working-directory: Euro_Haul_Step1
         run: npx cap add android
-
       - name: Sync Android project
         working-directory: Euro_Haul_Step1
         run: npx cap sync android
-
       - name: Build APK
         working-directory: Euro_Haul_Step1/android
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon assembleDebug
-
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Euro-Haul-Android-APK
           path: Euro_Haul_Step1/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-          
