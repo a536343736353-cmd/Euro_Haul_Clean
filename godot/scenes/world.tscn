@@ -1,0 +1,39 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/truck.tscn" id="1_truck"]
+[ext_resource type="Script" path="res://scripts/world_controller.gd" id="2_world"]
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_ground"]
+size = Vector2(180, 240)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_ground"]
+size = Vector3(180, 0.3, 240)
+
+[sub_resource type="BoxMesh" id="BoxMesh_road"]
+size = Vector3(12, 0.12, 180)
+
+[node name="World" type="Node3D"]
+script = ExtResource("2_world")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-48, -25, 0)
+shadow_enabled = true
+directional_shadow_max_distance = 90.0
+
+[node name="Ground" type="StaticBody3D" parent="."]
+
+[node name="GroundMesh" type="MeshInstance3D" parent="Ground"]
+position = Vector3(0, -0.15, 0)
+mesh = SubResource("PlaneMesh_ground")
+
+[node name="GroundCollision" type="CollisionShape3D" parent="Ground"]
+shape = SubResource("BoxShape3D_ground")
+
+[node name="Road" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.02, -40)
+mesh = SubResource("BoxMesh_road")
+
+[node name="Truck" parent="." instance=ExtResource("1_truck")]
+position = Vector3(0, 0.4, 0)
