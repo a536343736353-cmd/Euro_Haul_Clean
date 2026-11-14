@@ -301,6 +301,71 @@ function bindButton(id,key){
 bindButton("left","left"); bindButton("right","right");
 bindButton("accelerate","gas"); bindButton("brake","brake");
 let speed=0,steerValue=0,odometer=0;
+
+// STEP 02/10 — delivery missions, live dashboard and persistent earnings.
+const saveKey="euroHaulCareerV1";
+let career={cash:0,deliveries:0};
+try{
+  const stored=JSON.parse(localStorage.getItem(saveKey)||"null");
+  if(stored&&Number.isFinite(stored.cash)&&Number.isFinite(stored.deliveries)){
+    career.cash=Math.max(0,Math.floor(stored.cash));
+    career.deliveries=Math.max(0,Math.floor(stored.deliveries));
+  }
+}catch(_){ /* Storage may be unavailable in a restricted WebView. */ }
+
+const hudStyle=document.createElement("style");
+hudStyle.textContent=`
+#careerHud{position:absolute;z-index:5;top:82px;right:12px;min-width:154px;padding:10px 12px;border:1px solid #ffffff55;border-radius:12px;background:#08131ddd;color:#fff;font:700 12px Arial,sans-serif;box-shadow:0 4px 16px #0007;pointer-events:none}
+#careerHud .hudTitle{font-size:9px;letter-spacing:1.5px;color:#a9c5d2;margin-bottom:7px}
+#careerHud .hudRow{display:flex;justify-content:space-between;gap:16px;margin:5px 0}
+#careerHud .hudValue{color:#f5d77a;font-variant-numeric:tabular-nums}
+#careerHud #missionText{max-width:210px;margin-top:7px;padding-top:7px;border-top:1px solid #ffffff33;color:#dce9ed;font-size:10px;line-height:1.35}
+#careerToast{position:absolute;z-index:6;top:47%;left:50%;transform:translate(-50%,-50%);padding:12px 18px;border-radius:10px;background:#07131eee;color:#fff;font:bold 14px Arial,sans-serif;text-align:center;display:none;pointer-events:none}
+`;
+document.head.appendChild(hudStyle);
+const hud=document.createElement("div");
+hud.id="careerHud";
+hud.innerHTML='<div class="hudTitle">EURO HAUL • DRIVER</div><div class="hudRow"><span>SPEED</span><span class="hudValue" id="hudSpeed">0 km/h</span></div><div class="hudRow"><span>TRIP</span><span class="hudValue" id="hudTrip">0.0 km</span></div><div class="hudRow"><span>BALANCE</span><span class="hudValue" id="hudCash">€0</span></div><div class="hudRow"><span>DELIVERIES</span><span class="hudValue" id="hudJobs">0</span></div><div id="missionText">Loading delivery route…</div>';
+document.body.appendChild(hud);
+const toast=document.createElement("div");toast.id="careerToast";document.body.appendChild(toast);
+const hudSpeed=document.getElementById("hudSpeed"),hudTrip=document.getElementById("hudTrip");
+const hudCash=document.getElementById("hudCash"),hudJobs=document.getElementById("hudJobs");
+const missionText=document.getElementById("missionText");
+const destination=new BABYLON.TransformNode("deliveryDestination",scene);
+function missionBox(name,w,h,d,x,y,z,material){
+  const mesh=BABYLON.MeshBuilder.CreateBox(name,{width:w,height:h,depth:d},scene);
+  mesh.position.set(x,y,z);mesh.parent=destination;mesh.material=material;return mesh;
+}
+const markerMat=mat("deliveryMarkerGreen","#22c879",0.25);
+const markerGlow=mat("deliveryMarkerGlow","#b8ffda",0.1,0.2);
+missionBox("deliveryLeftPost",0.18,4.8,0.18,-5.4,2.4,0,markerMat);
+missionBox("deliveryRightPost",0.18,4.8,0.18,5.4,2.4,0,markerMat);
+missionBox("deliveryHeader",11,0.22,0.22,0,4.75,0,markerMat);
+missionBox("deliverySign",3.6,0.9,0.2,0,4.1,0.15,black);
+missionBox("deliverySignStripe",2.9,0.08,0.04,0,4.1,0.27,markerGlow);
+const markerLamp=BABYLON.MeshBuilder.CreateSphere("deliveryBeacon",{diameter:0.8,segments:10},scene);
+markerLamp.parent=destination;markerLamp.position.set(0,5.45,0);markerLamp.material=markerGlow;
+let destinationZ=180,lastHudUpdate=0,toastUntil=0;
+destination.position.z=destinationZ;
+function saveCareer(){
+  try{localStorage.setItem(saveKey,JSON.stringify(career));}catch(_){ /* Continue the current session without storage. */ }
+}
+function showToast(message){
+  toast.textContent=message;toast.style.display="block";toastUntil=performance.now()+2600;
+}
+function updateCareerHud(now){
+  if(now-lastHudUpdate<150)return;
+  lastHudUpdate=now;
+  hudSpeed.textContent=Math.round(speed*3.6)+" km/h";
+  hudTrip.textContent=(odometer/1000).toFixed(1)+" km";
+  hudCash.textContent="€"+career.cash.toLocaleString();
+  hudJobs.textContent=String(career.deliveries);
+  const remaining=Math.max(0,destinationZ-truck.position.z);
+  missionText.textContent=remaining>5
+    ? "DELIVERY "+(career.deliveries+1)+" • "+Math.ceil(remaining)+" m ahead. Slow down and stop inside the green gate."
+    : "DELIVERY GATE • Brake to below 10 km/h to complete the drop.";
+  if(toastUntil&&now>toastUntil){toast.style.display="none";toastUntil=0;}
+}
 scene.onBeforeRenderObservable.add(()=>{
  const dt=Math.min(engine.getDeltaTime()/1000,0.05);
  if(input.gas)speed=Math.min(speed+4.6*dt,19);
@@ -314,6 +379,13 @@ scene.onBeforeRenderObservable.add(()=>{
  truck.position.x=BABYLON.Scalar.Clamp(truck.position.x,-4.2,4.2);
  wheels.forEach(w=>w.rotation.x+=speed*dt*2.1);
  odometer+=speed*dt;
+ const remaining=destinationZ-truck.position.z;
+ if(remaining<=5&&remaining>=-5&&speed<2.8){
+   career.deliveries+=1;career.cash+=750;saveCareer();
+   destinationZ+=260;destination.position.z=destinationZ;
+   showToast("DELIVERY COMPLETE  +€750");
+ }
+ updateCareerHud(performance.now());
 });
 engine.runRenderLoop(()=>scene.render());
 window.addEventListener("resize",()=>engine.resize());
