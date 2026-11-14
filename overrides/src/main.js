@@ -368,12 +368,15 @@ function updateTraffic(dt,now){
 
 // STEP 02/10 — delivery missions, live dashboard and persistent earnings.
 const saveKey="euroHaulCareerV1";
-let career={cash:0,deliveries:0};
+let career={cash:0,deliveries:0,driverName:"New Driver",companyName:"Euro Haul Logistics",xp:0};
 try{
   const stored=JSON.parse(localStorage.getItem(saveKey)||"null");
   if(stored&&Number.isFinite(stored.cash)&&Number.isFinite(stored.deliveries)){
     career.cash=Math.max(0,Math.floor(stored.cash));
     career.deliveries=Math.max(0,Math.floor(stored.deliveries));
+    career.driverName=typeof stored.driverName==="string"?stored.driverName.slice(0,24):career.driverName;
+    career.companyName=typeof stored.companyName==="string"?stored.companyName.slice(0,32):career.companyName;
+    career.xp=Math.max(0,Math.floor(Number(stored.xp)||0));
   }
 }catch(_){ /* Storage may be unavailable in a restricted WebView. */ }
 
@@ -769,3 +772,46 @@ engine.runRenderLoop(()=>scene.render());
 
 window.addEventListener("resize",()=>engine.resize());
 if(loading)loading.style.display="none";
+
+
+// STAGE 01 — persistent driver and company profile.
+// The profile is part of the existing career save, not a separate demo screen.
+const showMenuPageBase=showMenuPage;
+showMenuPage=function(page){
+  if(page!=="profile"){showMenuPageBase(page);return;}
+  refreshMenuHome();
+  const level=1+Math.floor(Math.max(career.xp,career.deliveries*500)/2500);
+  const progress=Math.max(career.xp,career.deliveries*500)%2500;
+  menuDetail.innerHTML=
+    '<h2>DRIVER & COMPANY PROFILE</h2>'+
+    '<p>Your driver identity and company details are saved locally on this device and remain available offline.</p>'+
+    '<label class="eh-profile-label" for="ehDriverName">DRIVER NAME</label>'+
+    '<input id="ehDriverName" maxlength="24" autocomplete="name" value="">'+
+    '<label class="eh-profile-label" for="ehCompanyName">COMPANY NAME</label>'+
+    '<input id="ehCompanyName" maxlength="32" value="">'+
+    '<div class="eh-menu-facts"><span>DRIVER LEVEL</span><b>'+level+'</b></div>'+
+    '<div class="eh-menu-facts"><span>EXPERIENCE</span><b>'+progress+' / 2,500 XP</b></div>'+
+    '<div class="eh-menu-facts"><span>CAREER BALANCE</span><b>€'+career.cash.toLocaleString()+'</b></div>'+
+    '<div class="eh-menu-facts"><span>DELIVERIES COMPLETED</span><b>'+career.deliveries+'</b></div>'+
+    '<div class="eh-menu-facts"><span>TRIP DISTANCE</span><b>'+(odometer/1000).toFixed(1)+' km</b></div>'+
+    '<button id="ehSaveProfile" class="eh-action-button">SAVE DRIVER PROFILE</button>'+
+    '<p id="ehProfileFeedback" class="eh-small-note" aria-live="polite">Changes are not saved until you press Save.</p>';
+  const driverInput=document.getElementById("ehDriverName");
+  const companyInput=document.getElementById("ehCompanyName");
+  driverInput.value=career.driverName||"New Driver";
+  companyInput.value=career.companyName||"Euro Haul Logistics";
+  document.getElementById("ehSaveProfile").addEventListener("click",()=>{
+    const driver=driverInput.value.trim().replace(/\\s+/g," ");
+    const company=companyInput.value.trim().replace(/\\s+/g," ");
+    if(!driver||!company){
+      document.getElementById("ehProfileFeedback").textContent="Enter both a driver and company name before saving.";
+      return;
+    }
+    career.driverName=driver.slice(0,24);
+    career.companyName=company.slice(0,32);
+    career.xp=Math.max(career.xp,career.deliveries*500);
+    saveCareer();
+    document.getElementById("ehProfileFeedback").textContent="PROFILE SAVED ON THIS DEVICE.";
+    showToast("DRIVER PROFILE SAVED");
+  });
+};
